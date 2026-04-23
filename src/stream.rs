@@ -5,7 +5,8 @@ use axum::response::{
 };
 use eventsource_stream::Eventsource as EventsourceExt;
 use futures_util::StreamExt;
-use serde_json::json;
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use tracing::{error, warn};
 
@@ -14,24 +15,48 @@ use crate::{
     types::{ChatMessage, ChatRequest, ChatStreamChunk},
 };
 
+pub struct StreamArgs {
+    pub client: reqwest::Client,
+    pub url: String,
+    pub api_key: Arc<String>,
+    pub chat_req: ChatRequest,
+    pub response_id: String,
+    pub sessions: SessionStore,
+    pub prior_messages: Vec<ChatMessage>,
+    pub model: String,
+}
+
+struct ToolCallAccum {
+    id: String,
+    name: String,
+    arguments: String,
+}
+
 /// Translate an upstream Chat Completions SSE stream into a Responses API SSE stream.
 ///
-/// Events emitted:
-///   response.created           — sent immediately with the pre-allocated response_id
-///   response.output_text.delta — one per non-empty text chunk from upstream
-///   response.completed         — final event with the full accumulated response
+/// Text response event sequence:
+///   response.created → response.output_item.added (message) → response.output_text.delta*
+///   → response.output_item.done → response.completed
+///
+/// Tool call response event sequence:
+///   response.created → [accumulate deltas] → response.output_item.added (function_call)
+///   → response.function_call_arguments.delta → response.output_item.done → response.completed
 pub fn translate_stream(
-    client: reqwest::Client,
-    url: String,
-    api_key: Arc<String>,
-    chat_req: ChatRequest,
-    response_id: String,
-    sessions: SessionStore,
-    prior_messages: Vec<ChatMessage>,
-    model: String,
+    args: StreamArgs,
 ) -> Sse<impl futures_util::Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let StreamArgs {
+        client,
+        url,
+        api_key,
+        chat_req,
+        response_id,
+        sessions,
+        prior_messages,
+        model,
+    } = args;
+    let msg_item_id = format!("msg_{}", uuid::Uuid::new_v4().simple());
+
     let event_stream = stream! {
-        // Send response.created immediately so Codex CLI knows the response_id.
         yield Ok(Event::default()
             .event("response.created")
             .data(json!({
@@ -50,21 +75,23 @@ pub fn translate_stream(
                 let status = r.status();
                 let body = r.text().await.unwrap_or_default();
                 error!("upstream {status}: {body}");
-                yield Ok(Event::default().event("error").data(
-                    json!({"type": "error", "code": status.as_u16(), "message": body}).to_string()
+                yield Ok(Event::default().event("response.failed").data(
+                    json!({"type": "response.failed", "response": {"id": &response_id, "status": "failed", "error": {"code": status.as_u16().to_string(), "message": body}}}).to_string()
                 ));
                 return;
             }
             Err(e) => {
                 error!("upstream request failed: {e}");
-                yield Ok(Event::default().event("error").data(
-                    json!({"type": "error", "message": e.to_string()}).to_string()
+                yield Ok(Event::default().event("response.failed").data(
+                    json!({"type": "response.failed", "response": {"id": &response_id, "status": "failed", "error": {"code": "connection_error", "message": e.to_string()}}}).to_string()
                 ));
                 return;
             }
         };
 
-        let mut accumulated = String::new();
+        let mut accumulated_text = String::new();
+        let mut tool_calls: BTreeMap<usize, ToolCallAccum> = BTreeMap::new();
+        let mut emitted_message_item = false;
         let mut source = upstream.bytes_stream().eventsource();
 
         while let Some(ev) = source.next().await {
@@ -80,15 +107,51 @@ pub fn translate_stream(
                         Err(e) => warn!("chunk parse error: {e} — data: {}", ev.data),
                         Ok(chunk) => {
                             for choice in &chunk.choices {
+                                // Text content
                                 let content = choice.delta.content.as_deref().unwrap_or("");
                                 if !content.is_empty() {
-                                    accumulated.push_str(content);
+                                    if !emitted_message_item {
+                                        yield Ok(Event::default()
+                                            .event("response.output_item.added")
+                                            .data(json!({
+                                                "type": "response.output_item.added",
+                                                "output_index": 0,
+                                                "item": { "type": "message", "id": &msg_item_id, "role": "assistant", "content": [], "status": "in_progress" }
+                                            }).to_string()));
+                                        emitted_message_item = true;
+                                    }
+                                    accumulated_text.push_str(content);
                                     yield Ok(Event::default()
                                         .event("response.output_text.delta")
                                         .data(json!({
                                             "type": "response.output_text.delta",
+                                            "item_id": &msg_item_id,
+                                            "output_index": 0,
+                                            "content_index": 0,
                                             "delta": content
                                         }).to_string()));
+                                }
+
+                                // Tool call deltas — accumulate by index
+                                if let Some(delta_calls) = &choice.delta.tool_calls {
+                                    for dc in delta_calls {
+                                        let entry = tool_calls.entry(dc.index).or_insert(ToolCallAccum {
+                                            id: String::new(),
+                                            name: String::new(),
+                                            arguments: String::new(),
+                                        });
+                                        if let Some(id) = &dc.id {
+                                            if !id.is_empty() { entry.id.clone_from(id); }
+                                        }
+                                        if let Some(func) = &dc.function {
+                                            if let Some(n) = &func.name {
+                                                if !n.is_empty() { entry.name.push_str(n); }
+                                            }
+                                            if let Some(a) = &func.arguments {
+                                                entry.arguments.push_str(a);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -97,16 +160,114 @@ pub fn translate_stream(
             }
         }
 
-        // Persist the complete turn to the session store.
+        // Close message item if one was opened
+        if emitted_message_item {
+            yield Ok(Event::default()
+                .event("response.output_item.done")
+                .data(json!({
+                    "type": "response.output_item.done",
+                    "output_index": 0,
+                    "item": {
+                        "type": "message",
+                        "id": &msg_item_id,
+                        "role": "assistant",
+                        "status": "completed",
+                        "content": [{"type": "output_text", "text": &accumulated_text}]
+                    }
+                }).to_string()));
+        }
+
+        // Emit function_call items for each accumulated tool call
+        let base_index: usize = if emitted_message_item { 1 } else { 0 };
+        let mut fc_items: Vec<Value> = Vec::new();
+
+        for (rel_idx, (_, tc)) in tool_calls.iter().enumerate() {
+            let fc_item_id = format!("fc_{}", uuid::Uuid::new_v4().simple());
+            let output_index = base_index + rel_idx;
+
+            yield Ok(Event::default()
+                .event("response.output_item.added")
+                .data(json!({
+                    "type": "response.output_item.added",
+                    "output_index": output_index,
+                    "item": {
+                        "type": "function_call",
+                        "id": &fc_item_id,
+                        "call_id": &tc.id,
+                        "name": &tc.name,
+                        "arguments": "",
+                        "status": "in_progress"
+                    }
+                }).to_string()));
+
+            if !tc.arguments.is_empty() {
+                yield Ok(Event::default()
+                    .event("response.function_call_arguments.delta")
+                    .data(json!({
+                        "type": "response.function_call_arguments.delta",
+                        "item_id": &fc_item_id,
+                        "output_index": output_index,
+                        "delta": &tc.arguments
+                    }).to_string()));
+            }
+
+            yield Ok(Event::default()
+                .event("response.output_item.done")
+                .data(json!({
+                    "type": "response.output_item.done",
+                    "output_index": output_index,
+                    "item": {
+                        "type": "function_call",
+                        "id": &fc_item_id,
+                        "call_id": &tc.id,
+                        "name": &tc.name,
+                        "arguments": &tc.arguments,
+                        "status": "completed"
+                    }
+                }).to_string()));
+
+            fc_items.push(json!({
+                "type": "function_call",
+                "id": fc_item_id,
+                "call_id": &tc.id,
+                "name": &tc.name,
+                "arguments": &tc.arguments,
+                "status": "completed"
+            }));
+        }
+
+        // Persist turn to session store
         let mut messages = prior_messages;
+        let assistant_tool_calls: Option<Vec<Value>> = if tool_calls.is_empty() {
+            None
+        } else {
+            Some(tool_calls.values().map(|tc| json!({
+                "id": &tc.id,
+                "type": "function",
+                "function": { "name": &tc.name, "arguments": &tc.arguments }
+            })).collect())
+        };
         messages.push(ChatMessage {
             role: "assistant".into(),
-            content: Some(accumulated.clone()),
-            tool_calls: None,
+            content: if accumulated_text.is_empty() { None } else { Some(accumulated_text.clone()) },
+            tool_calls: assistant_tool_calls,
             tool_call_id: None,
             name: None,
         });
         sessions.save_with_id(response_id.clone(), messages);
+
+        // Build output array for response.completed
+        let mut output_items: Vec<Value> = Vec::new();
+        if emitted_message_item {
+            output_items.push(json!({
+                "type": "message",
+                "id": &msg_item_id,
+                "role": "assistant",
+                "status": "completed",
+                "content": [{"type": "output_text", "text": &accumulated_text}]
+            }));
+        }
+        output_items.extend(fc_items);
 
         yield Ok(Event::default()
             .event("response.completed")
@@ -116,11 +277,7 @@ pub fn translate_stream(
                     "id": &response_id,
                     "status": "completed",
                     "model": &model,
-                    "output": [{
-                        "type": "message",
-                        "role": "assistant",
-                        "content": [{"type": "output_text", "text": &accumulated}]
-                    }]
+                    "output": output_items
                 }
             }).to_string()));
     };

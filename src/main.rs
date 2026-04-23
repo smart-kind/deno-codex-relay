@@ -5,17 +5,17 @@ mod types;
 
 use anyhow::Result;
 use axum::{
-    extract::State,
+    extract::{Request, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use clap::Parser;
 use reqwest::Client;
 use session::SessionStore;
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{error, info, warn, debug};
 use types::*;
 
 #[derive(Parser, Debug)]
@@ -63,6 +63,8 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/v1/responses", post(handle_responses))
+        .route("/v1/models", get(handle_models))
+        .fallback(handle_fallback)
         .with_state(state);
 
     let addr = format!("127.0.0.1:{}", args.port);
@@ -74,9 +76,62 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// GET /v1/models — proxy to upstream so Codex gets real model metadata.
+async fn handle_models(State(state): State<AppState>) -> Response {
+    info!("GET /v1/models");
+    let url = format!("{}/models", state.upstream);
+    let mut builder = state.client.get(&url);
+    if !state.api_key.is_empty() {
+        builder = builder.bearer_auth(state.api_key.as_str());
+    }
+    match builder.send().await {
+        Ok(r) if r.status().is_success() => {
+            match r.json::<serde_json::Value>().await {
+                Ok(body) => Json(body).into_response(),
+                Err(e) => {
+                    warn!("models parse error: {e}");
+                    Json(serde_json::json!({ "object": "list", "data": [] })).into_response()
+                }
+            }
+        }
+        Ok(r) => {
+            warn!("upstream models {}", r.status());
+            Json(serde_json::json!({ "object": "list", "data": [] })).into_response()
+        }
+        Err(e) => {
+            warn!("upstream models error: {e}");
+            Json(serde_json::json!({ "object": "list", "data": [] })).into_response()
+        }
+    }
+}
+
+/// Catch-all: log unknown requests so we can see what Codex is sending.
+async fn handle_fallback(req: Request) -> Response {
+    warn!("unhandled {} {}", req.method(), req.uri().path());
+    (StatusCode::NOT_FOUND, "not found").into_response()
+}
+
 async fn handle_responses(
     State(state): State<AppState>,
-    Json(req): Json<ResponsesRequest>,
+    body: axum::body::Bytes,
+) -> Response {
+    let req: ResponsesRequest = match serde_json::from_slice(&body) {
+        Ok(r) => r,
+        Err(e) => {
+            error!("JSON parse error: {e}");
+            error!("body prefix: {}", String::from_utf8_lossy(&body[..body.len().min(200)]));
+            return (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()).into_response();
+        }
+    };
+    debug!("→ model={} stream={} input_items={} tools={}", req.model, req.stream,
+        match &req.input { crate::types::ResponsesInput::Messages(v) => v.len(), _ => 1 },
+        req.tools.len());
+    handle_responses_inner(state, req).await
+}
+
+async fn handle_responses_inner(
+    state: AppState,
+    req: ResponsesRequest,
 ) -> Response {
     let history = req
         .previous_response_id
@@ -91,16 +146,16 @@ async fn handle_responses(
     if req.stream {
         let response_id = state.sessions.new_id();
         chat_req.stream = true;
-        stream::translate_stream(
-            state.client,
+        stream::translate_stream(stream::StreamArgs {
+            client: state.client,
             url,
-            state.api_key,
+            api_key: state.api_key,
             chat_req,
             response_id,
-            state.sessions,
-            history,
+            sessions: state.sessions,
+            prior_messages: history,
             model,
-        )
+        })
         .into_response()
     } else {
         chat_req.stream = false;

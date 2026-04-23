@@ -17,28 +17,20 @@ pub struct ResponsesRequest {
     pub temperature: Option<f64>,
     #[serde(default)]
     pub max_output_tokens: Option<u32>,
+    /// Responses API system prompt field (some clients use `system`, others `instructions`)
     #[serde(default)]
     pub system: Option<String>,
+    #[serde(default)]
+    pub instructions: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum ResponsesInput {
     Text(String),
-    Messages(Vec<ResponsesInputItem>),
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct ResponsesInputItem {
-    pub role: String,
-    pub content: ResponsesContent,
-}
-
-#[derive(Debug, Deserialize, Clone, Serialize)]
-#[serde(untagged)]
-pub enum ResponsesContent {
-    Text(String),
-    Parts(Vec<ContentPart>),
+    /// Each item may be a user/assistant message OR a function_call_output result.
+    /// Using Value here lets us handle both without a brittle fixed schema.
+    Messages(Vec<Value>),
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -125,19 +117,39 @@ pub struct ChatUsage {
 pub struct ChatStreamChunk {
     pub choices: Vec<ChatStreamChoice>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub usage: Option<ChatUsage>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ChatStreamChoice {
     pub delta: ChatDelta,
+    #[allow(dead_code)]
     pub finish_reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub struct ChatDelta {
+    #[allow(dead_code)]
     pub role: Option<String>,
     pub content: Option<String>,
     #[serde(default)]
-    pub tool_calls: Option<Vec<Value>>,
+    pub tool_calls: Option<Vec<DeltaToolCall>>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct DeltaToolCall {
+    pub index: usize,
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub function: Option<DeltaFunction>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct DeltaFunction {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub arguments: Option<String>,
 }
