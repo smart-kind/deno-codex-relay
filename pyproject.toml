@@ -3,7 +3,7 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "codex-bridge"
+name = "codex-relay"
 dynamic = ["version"]
 requires-python = ">=3.11"
 description = "Responses API ↔ Chat Completions translation bridge for Codex CLI"

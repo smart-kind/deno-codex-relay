@@ -19,7 +19,7 @@ use tracing::{error, info, warn, debug};
 use types::*;
 
 #[derive(Parser, Debug)]
-#[command(name = "codex-bridge", about = "Responses API ↔ Chat Completions bridge")]
+#[command(name = "codex-relay", about = "Responses API ↔ Chat Completions bridge")]
 struct Args {
     #[arg(long, env = "CODEX_BRIDGE_PORT", default_value = "4444")]
     port: u16,
@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "codex_bridge=info".into()),
+                .unwrap_or_else(|_| "codex_relay=info".into()),
         )
         .init();
 
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
         .with_state(state);
 
     let addr = format!("127.0.0.1:{}", args.port);
-    info!("codex-bridge listening on {addr} → {}", args.upstream);
+    info!("codex-relay listening on {addr} → {}", args.upstream);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;

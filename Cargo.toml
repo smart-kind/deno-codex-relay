@@ -1,15 +1,15 @@
 [package]
-name = "codex-bridge"
+name = "codex-relay"
 version = "0.1.0"
 edition = "2021"
 description = "Responses API ↔ Chat Completions translation bridge for Codex CLI"
 license = "MIT"
-repository = "https://github.com/sapient-inc/codex-bridge"
-keywords = ["codex", "openai", "llm", "proxy", "bridge"]
+repository = "https://github.com/sapient-inc/codex-relay"
+keywords = ["codex", "openai", "llm", "proxy", "relay"]
 categories = ["command-line-utilities", "network-programming"]
 
 [[bin]]
-name = "codex-bridge"
+name = "codex-relay"
 path = "src/main.rs"
 
 [dependencies]
