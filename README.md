@@ -21,9 +21,9 @@ cargo install codex-relay
 **1. Start the relay**
 
 ```bash
-CODEX_BRIDGE_UPSTREAM=https://api.deepseek.com/v1 \
-CODEX_BRIDGE_API_KEY=$DEEPSEEK_API_KEY \
-CODEX_BRIDGE_PORT=4446 \
+CODEX_RELAY_UPSTREAM=https://api.deepseek.com/v1 \
+CODEX_RELAY_API_KEY=$DEEPSEEK_API_KEY \
+CODEX_RELAY_PORT=4446 \
 codex-relay
 ```
 
@@ -67,9 +67,9 @@ Any OpenAI-compatible endpoint works.
 
 | Variable | Default | Description |
 |---|---|---|
-| `CODEX_BRIDGE_PORT` | `4444` | Port to listen on |
-| `CODEX_BRIDGE_UPSTREAM` | `https://openrouter.ai/api/v1` | Upstream Chat Completions base URL |
-| `CODEX_BRIDGE_API_KEY` | _(empty)_ | API key forwarded to upstream |
+| `CODEX_RELAY_PORT` | `4444` | Port to listen on |
+| `CODEX_RELAY_UPSTREAM` | `https://openrouter.ai/api/v1` | Upstream Chat Completions base URL |
+| `CODEX_RELAY_API_KEY` | _(empty)_ | API key forwarded to upstream |
 | `RUST_LOG` | `codex_relay=info` | Log verbosity |
 
 ## Python API

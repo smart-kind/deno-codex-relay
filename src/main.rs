@@ -21,17 +21,17 @@ use types::*;
 #[derive(Parser, Debug)]
 #[command(name = "codex-relay", about = "Responses API ↔ Chat Completions bridge")]
 struct Args {
-    #[arg(long, env = "CODEX_BRIDGE_PORT", default_value = "4444")]
+    #[arg(long, env = "CODEX_RELAY_PORT", default_value = "4444")]
     port: u16,
 
     #[arg(
         long,
-        env = "CODEX_BRIDGE_UPSTREAM",
+        env = "CODEX_RELAY_UPSTREAM",
         default_value = "https://openrouter.ai/api/v1"
     )]
     upstream: String,
 
-    #[arg(long, env = "CODEX_BRIDGE_API_KEY", default_value = "")]
+    #[arg(long, env = "CODEX_RELAY_API_KEY", default_value = "")]
     api_key: String,
 }
 

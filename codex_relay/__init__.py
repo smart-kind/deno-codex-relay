@@ -33,7 +33,7 @@ def start(
     """Start codex-relay as a background process and return the Popen handle."""
     env = os.environ.copy()
     if api_key:
-        env["CODEX_BRIDGE_API_KEY"] = api_key
+        env["CODEX_RELAY_API_KEY"] = api_key
 
     return subprocess.Popen(
         [str(_find_binary()), "--port", str(port), "--upstream", upstream],
