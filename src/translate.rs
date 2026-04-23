@@ -1,9 +1,9 @@
 use serde_json::{json, Value};
 
-use crate::types::*;
+use crate::{session::SessionStore, types::*};
 
 /// Convert a Responses API request + prior history into a Chat Completions request.
-pub fn to_chat_request(req: &ResponsesRequest, history: Vec<ChatMessage>) -> ChatRequest {
+pub fn to_chat_request(req: &ResponsesRequest, history: Vec<ChatMessage>, sessions: &SessionStore) -> ChatRequest {
     let mut messages = history;
 
     // Prefer `instructions` (Codex CLI) over `system` (other clients).
@@ -15,6 +15,7 @@ pub fn to_chat_request(req: &ResponsesRequest, history: Vec<ChatMessage>) -> Cha
                 ChatMessage {
                     role: "system".into(),
                     content: Some(system.clone()),
+                    reasoning_content: None,
                     tool_calls: None,
                     tool_call_id: None,
                     name: None,
@@ -29,63 +30,88 @@ pub fn to_chat_request(req: &ResponsesRequest, history: Vec<ChatMessage>) -> Cha
             messages.push(ChatMessage {
                 role: "user".into(),
                 content: Some(text.clone()),
+                reasoning_content: None,
                 tool_calls: None,
                 tool_call_id: None,
                 name: None,
             });
         }
         ResponsesInput::Messages(items) => {
-            for item in items {
+            // Process items with index so we can group consecutive function_call
+            // entries into a single assistant message. Providers require all tool
+            // calls from one turn to live in one message with a tool_calls array.
+            let mut i = 0;
+            while i < items.len() {
+                let item = &items[i];
                 let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                match item_type {
-                    "function_call" => {
-                        // Tool call issued by the assistant in a prior turn.
-                        // Codex includes it inline in subsequent requests so the full
-                        // conversation history is self-contained. Map to a Chat Completions
-                        // assistant message with a tool_calls array.
-                        let call_id = item.get("call_id").and_then(|v| v.as_str()).unwrap_or("");
-                        let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                        let arguments = item.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
-                        messages.push(ChatMessage {
-                            role: "assistant".into(),
-                            content: None,
-                            tool_calls: Some(vec![json!({
-                                "id": call_id,
-                                "type": "function",
-                                "function": { "name": name, "arguments": arguments }
-                            })]),
-                            tool_call_id: None,
-                            name: None,
-                        });
-                    }
-                    "function_call_output" => {
-                        let call_id = item.get("call_id").and_then(|v| v.as_str()).unwrap_or("");
-                        let output = item.get("output").and_then(|v| v.as_str()).unwrap_or("");
-                        messages.push(ChatMessage {
-                            role: "tool".into(),
-                            content: Some(output.to_string()),
-                            tool_calls: None,
-                            tool_call_id: Some(call_id.to_string()),
-                            name: None,
-                        });
-                    }
-                    _ => {
-                        // Regular user/assistant/developer message
-                        let role = item.get("role").and_then(|v| v.as_str()).unwrap_or("user");
-                        let role = match role {
-                            "developer" => "system",
-                            other => other,
+
+                if item_type == "function_call" {
+                    // Collect this and all immediately following function_call items
+                    // into one assistant message with multiple tool_calls entries.
+                    let mut grouped: Vec<Value> = Vec::new();
+                    let mut reasoning_content: Option<String> = None;
+
+                    while i < items.len() {
+                        let cur = &items[i];
+                        if cur.get("type").and_then(|v| v.as_str()).unwrap_or("") != "function_call" {
+                            break;
                         }
-                        .to_string();
-                        let content = value_to_text(item.get("content"));
-                        messages.push(ChatMessage {
-                            role,
-                            content: Some(content),
-                            tool_calls: None,
-                            tool_call_id: None,
-                            name: None,
-                        });
+                        let call_id = cur.get("call_id").and_then(|v| v.as_str()).unwrap_or("");
+                        let name    = cur.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                        let args    = cur.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
+                        if reasoning_content.is_none() {
+                            reasoning_content = sessions.get_reasoning(call_id);
+                        }
+                        grouped.push(json!({
+                            "id": call_id,
+                            "type": "function",
+                            "function": { "name": name, "arguments": args }
+                        }));
+                        i += 1;
                     }
+
+                    messages.push(ChatMessage {
+                        role: "assistant".into(),
+                        content: None,
+                        reasoning_content,
+                        tool_calls: Some(grouped),
+                        tool_call_id: None,
+                        name: None,
+                    });
+                } else {
+                    match item_type {
+                        "function_call_output" => {
+                            let call_id = item.get("call_id").and_then(|v| v.as_str()).unwrap_or("");
+                            let output  = item.get("output").and_then(|v| v.as_str()).unwrap_or("");
+                            messages.push(ChatMessage {
+                                role: "tool".into(),
+                                content: Some(output.to_string()),
+                                reasoning_content: None,
+                                tool_calls: None,
+                                tool_call_id: Some(call_id.to_string()),
+                                name: None,
+                            });
+                        }
+                        _ => {
+                            // Regular user/assistant/developer message
+                            let role = item.get("role").and_then(|v| v.as_str()).unwrap_or("user");
+                            let role = match role {
+                                "developer" => "system",
+                                other => other,
+                            }
+                            .to_string();
+                            let content = value_to_text(item.get("content"));
+                            messages.push(ChatMessage {
+                                role,
+                                content: Some(content),
+                                reasoning_content: None,
+                                tool_calls: None,
+                                tool_call_id: None,
+                                name: None,
+                            });
+                        }
+                    }
+                    i += 1;
                 }
             }
         }
@@ -143,6 +169,7 @@ pub fn from_chat_response(
         message: ChatMessage {
             role: "assistant".into(),
             content: Some(String::new()),
+            reasoning_content: None,
             tool_calls: None,
             tool_call_id: None,
             name: None,

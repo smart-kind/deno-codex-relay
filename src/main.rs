@@ -140,7 +140,7 @@ async fn handle_responses_inner(
         .unwrap_or_default();
 
     let model = req.model.clone();
-    let mut chat_req = translate::to_chat_request(&req, history.clone());
+    let mut chat_req = translate::to_chat_request(&req, history.clone(), &state.sessions);
     let url = format!("{}/chat/completions", state.upstream);
 
     if req.stream {
@@ -206,6 +206,7 @@ async fn handle_blocking(
                     .unwrap_or_else(|| ChatMessage {
                         role: "assistant".into(),
                         content: Some(String::new()),
+                        reasoning_content: None,
                         tool_calls: None,
                         tool_call_id: None,
                         name: None,

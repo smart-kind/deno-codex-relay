@@ -90,6 +90,7 @@ pub fn translate_stream(
         };
 
         let mut accumulated_text = String::new();
+        let mut accumulated_reasoning = String::new();
         let mut tool_calls: BTreeMap<usize, ToolCallAccum> = BTreeMap::new();
         let mut emitted_message_item = false;
         let mut source = upstream.bytes_stream().eventsource();
@@ -107,6 +108,13 @@ pub fn translate_stream(
                         Err(e) => warn!("chunk parse error: {e} — data: {}", ev.data),
                         Ok(chunk) => {
                             for choice in &chunk.choices {
+                                // Reasoning/thinking content (kimi-k2.6 etc.)
+                                if let Some(rc) = choice.delta.reasoning_content.as_deref() {
+                                    if !rc.is_empty() {
+                                        accumulated_reasoning.push_str(rc);
+                                    }
+                                }
+
                                 // Text content
                                 let content = choice.delta.content.as_deref().unwrap_or("");
                                 if !content.is_empty() {
@@ -237,6 +245,14 @@ pub fn translate_stream(
         }
 
         // Persist turn to session store
+        // Store reasoning_content per call_id so translate.rs can inject it
+        // back when Codex replays function_call items in the next request.
+        for tc in tool_calls.values() {
+            if !tc.id.is_empty() {
+                sessions.store_reasoning(tc.id.clone(), accumulated_reasoning.clone());
+            }
+        }
+
         let mut messages = prior_messages;
         let assistant_tool_calls: Option<Vec<Value>> = if tool_calls.is_empty() {
             None
@@ -250,6 +266,7 @@ pub fn translate_stream(
         messages.push(ChatMessage {
             role: "assistant".into(),
             content: if accumulated_text.is_empty() { None } else { Some(accumulated_text.clone()) },
+            reasoning_content: if accumulated_reasoning.is_empty() { None } else { Some(accumulated_reasoning.clone()) },
             tool_calls: assistant_tool_calls,
             tool_call_id: None,
             name: None,
