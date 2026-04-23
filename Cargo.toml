@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Responses API ↔ Chat Completions translation bridge for Codex CLI"
 license = "MIT"
-repository = "https://github.com/sapient-inc/codex-relay"
+repository = "https://github.com/MetaFARS/codex-relay"
 keywords = ["codex", "openai", "llm", "proxy", "relay"]
 categories = ["command-line-utilities", "network-programming"]
 

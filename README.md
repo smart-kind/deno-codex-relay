@@ -82,6 +82,10 @@ proc = start(port=4446, upstream="https://api.deepseek.com/v1", api_key="sk-..."
 proc.terminate()
 ```
 
+## Disclaimer
+
+This project is **not affiliated with, endorsed by, or sponsored by OpenAI**. "Codex" refers to [OpenAI Codex CLI](https://github.com/openai/codex), an open-source project licensed under Apache-2.0. codex-relay is an independent, community-built translation proxy.
+
 ## License
 
 MIT
