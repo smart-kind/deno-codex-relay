@@ -123,9 +123,10 @@ async fn handle_responses(
             return (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()).into_response();
         }
     };
-    debug!("→ model={} stream={} input_items={} tools={}", req.model, req.stream,
+    debug!("→ model={} stream={} input_items={} tools={} prev_resp={:?}",
+        req.model, req.stream,
         match &req.input { crate::types::ResponsesInput::Messages(v) => v.len(), _ => 1 },
-        req.tools.len());
+        req.tools.len(), req.previous_response_id);
     handle_responses_inner(state, req).await
 }
 
@@ -146,6 +147,7 @@ async fn handle_responses_inner(
     if req.stream {
         let response_id = state.sessions.new_id();
         chat_req.stream = true;
+        let request_messages = chat_req.messages.clone();
         stream::translate_stream(stream::StreamArgs {
             client: state.client,
             url,
@@ -154,6 +156,7 @@ async fn handle_responses_inner(
             response_id,
             sessions: state.sessions,
             prior_messages: history,
+            request_messages,
             model,
         })
         .into_response()

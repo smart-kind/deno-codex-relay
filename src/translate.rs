@@ -70,14 +70,19 @@ pub fn to_chat_request(req: &ResponsesRequest, history: Vec<ChatMessage>, sessio
                         i += 1;
                     }
 
-                    messages.push(ChatMessage {
+                    let mut msg = ChatMessage {
                         role: "assistant".into(),
                         content: None,
                         reasoning_content,
                         tool_calls: Some(grouped),
                         tool_call_id: None,
                         name: None,
-                    });
+                    };
+                    // Fallback: try turn-level fingerprint if call_id lookup missed
+                    if msg.reasoning_content.is_none() {
+                        msg.reasoning_content = sessions.get_turn_reasoning(&messages, &msg);
+                    }
+                    messages.push(msg);
                 } else {
                     match item_type {
                         "function_call_output" => {
@@ -101,14 +106,21 @@ pub fn to_chat_request(req: &ResponsesRequest, history: Vec<ChatMessage>, sessio
                             }
                             .to_string();
                             let content = value_to_text(item.get("content"));
-                            messages.push(ChatMessage {
+                            let mut msg = ChatMessage {
                                 role,
                                 content: Some(content),
                                 reasoning_content: None,
                                 tool_calls: None,
                                 tool_call_id: None,
                                 name: None,
-                            });
+                            };
+                            // For assistant messages, try to recover reasoning_content
+                            // from the turn-level index (needed for thinking models like
+                            // DeepSeek that require reasoning_content to be passed back).
+                            if msg.role == "assistant" {
+                                msg.reasoning_content = sessions.get_turn_reasoning(&messages, &msg);
+                            }
+                            messages.push(msg);
                         }
                     }
                     i += 1;
@@ -216,5 +228,131 @@ fn value_to_text(v: Option<&Value>) -> String {
             .collect::<Vec<_>>()
             .join(""),
         Some(other) => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn base_req(input: ResponsesInput) -> ResponsesRequest {
+        ResponsesRequest {
+            model: "test".into(),
+            input,
+            previous_response_id: None,
+            tools: vec![],
+            stream: false,
+            temperature: None,
+            max_output_tokens: None,
+            system: None,
+            instructions: None,
+        }
+    }
+
+    #[test]
+    fn test_text_input_becomes_user_message() {
+        let sessions = SessionStore::new();
+        let req = base_req(ResponsesInput::Text("hello".into()));
+        let chat = to_chat_request(&req, vec![], &sessions);
+        assert_eq!(chat.messages.len(), 1);
+        assert_eq!(chat.messages[0].role, "user");
+        assert_eq!(chat.messages[0].content.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn test_system_prompt_from_instructions() {
+        let sessions = SessionStore::new();
+        let mut req = base_req(ResponsesInput::Text("hi".into()));
+        req.instructions = Some("be helpful".into());
+        let chat = to_chat_request(&req, vec![], &sessions);
+        assert_eq!(chat.messages[0].role, "system");
+        assert_eq!(chat.messages[0].content.as_deref(), Some("be helpful"));
+    }
+
+    #[test]
+    fn test_developer_role_mapped_to_system() {
+        let sessions = SessionStore::new();
+        let req = base_req(ResponsesInput::Messages(vec![
+            json!({"type": "message", "role": "developer", "content": "secret instructions"}),
+        ]));
+        let chat = to_chat_request(&req, vec![], &sessions);
+        assert_eq!(chat.messages[0].role, "system");
+        assert_eq!(chat.messages[0].content.as_deref(), Some("secret instructions"));
+    }
+
+    #[test]
+    fn test_function_call_grouping() {
+        let sessions = SessionStore::new();
+        let req = base_req(ResponsesInput::Messages(vec![
+            json!({"type": "function_call", "call_id": "c1", "name": "fn_a", "arguments": "{}"}),
+            json!({"type": "function_call", "call_id": "c2", "name": "fn_b", "arguments": "{}"}),
+        ]));
+        let chat = to_chat_request(&req, vec![], &sessions);
+        assert_eq!(chat.messages.len(), 1);
+        assert_eq!(chat.messages[0].role, "assistant");
+        let calls = chat.messages[0].tool_calls.as_ref().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0]["id"], "c1");
+        assert_eq!(calls[1]["id"], "c2");
+    }
+
+    #[test]
+    fn test_function_call_output_becomes_tool_message() {
+        let sessions = SessionStore::new();
+        let req = base_req(ResponsesInput::Messages(vec![
+            json!({"type": "function_call_output", "call_id": "c1", "output": "result"}),
+        ]));
+        let chat = to_chat_request(&req, vec![], &sessions);
+        assert_eq!(chat.messages[0].role, "tool");
+        assert_eq!(chat.messages[0].content.as_deref(), Some("result"));
+        assert_eq!(chat.messages[0].tool_call_id.as_deref(), Some("c1"));
+    }
+
+    #[test]
+    fn test_convert_tool_flat_to_nested() {
+        let flat = json!({
+            "type": "function",
+            "name": "my_fn",
+            "description": "does stuff",
+            "parameters": {"type": "object"}
+        });
+        let nested = convert_tool(&flat);
+        assert_eq!(nested["type"], "function");
+        assert_eq!(nested["function"]["name"], "my_fn");
+        assert_eq!(nested["function"]["description"], "does stuff");
+    }
+
+    #[test]
+    fn test_convert_tool_already_nested() {
+        let already = json!({
+            "type": "function",
+            "function": {"name": "my_fn", "description": "does stuff"}
+        });
+        let result = convert_tool(&already);
+        assert_eq!(result, already);
+    }
+
+    #[test]
+    fn test_value_to_text_string() {
+        let sessions = SessionStore::new();
+        let req = base_req(ResponsesInput::Messages(vec![
+            json!({"type": "message", "role": "user", "content": "plain text"}),
+        ]));
+        let chat = to_chat_request(&req, vec![], &sessions);
+        assert_eq!(chat.messages[0].content.as_deref(), Some("plain text"));
+    }
+
+    #[test]
+    fn test_value_to_text_parts_array() {
+        let sessions = SessionStore::new();
+        let req = base_req(ResponsesInput::Messages(vec![
+            json!({"type": "message", "role": "user", "content": [
+                {"type": "input_text", "text": "hello "},
+                {"type": "input_text", "text": "world"}
+            ]}),
+        ]));
+        let chat = to_chat_request(&req, vec![], &sessions);
+        assert_eq!(chat.messages[0].content.as_deref(), Some("hello world"));
     }
 }

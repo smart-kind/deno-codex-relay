@@ -23,6 +23,10 @@ pub struct StreamArgs {
     pub response_id: String,
     pub sessions: SessionStore,
     pub prior_messages: Vec<ChatMessage>,
+    /// The fully translated request messages (including replayed history).
+    /// Used to save correct session history so turn-level reasoning can be
+    /// recovered when Codex replays the conversation without previous_response_id.
+    pub request_messages: Vec<ChatMessage>,
     pub model: String,
 }
 
@@ -52,6 +56,7 @@ pub fn translate_stream(
         response_id,
         sessions,
         prior_messages,
+        request_messages,
         model,
     } = args;
     let msg_item_id = format!("msg_{}", uuid::Uuid::new_v4().simple());
@@ -253,7 +258,6 @@ pub fn translate_stream(
             }
         }
 
-        let mut messages = prior_messages;
         let assistant_tool_calls: Option<Vec<Value>> = if tool_calls.is_empty() {
             None
         } else {
@@ -263,14 +267,23 @@ pub fn translate_stream(
                 "function": { "name": &tc.name, "arguments": &tc.arguments }
             })).collect())
         };
-        messages.push(ChatMessage {
+        let assistant_msg = ChatMessage {
             role: "assistant".into(),
             content: if accumulated_text.is_empty() { None } else { Some(accumulated_text.clone()) },
             reasoning_content: if accumulated_reasoning.is_empty() { None } else { Some(accumulated_reasoning.clone()) },
             tool_calls: assistant_tool_calls,
             tool_call_id: None,
             name: None,
-        });
+        };
+
+        // Index reasoning by turn fingerprint so it can be recovered when
+        // Codex replays the full conversation in input[] without previous_response_id.
+        if !accumulated_reasoning.is_empty() {
+            sessions.store_turn_reasoning(&request_messages, &assistant_msg, accumulated_reasoning.clone());
+        }
+
+        let mut messages = prior_messages;
+        messages.push(assistant_msg);
         sessions.save_with_id(response_id.clone(), messages);
 
         // Build output array for response.completed
