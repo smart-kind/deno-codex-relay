@@ -7,4 +7,6 @@ services:
       - CODEX_RELAY_PORT=4444
       - CODEX_RELAY_UPSTREAM=https://api.deepseek.com
       - CODEX_RELAY_API_KEY=sk-8627083c220d4eed8b03d36e4c51ad9d
+      - RUST_LOG=codex_relay=debug
     restart: unless-stopped
+    container_name: codex-relay
