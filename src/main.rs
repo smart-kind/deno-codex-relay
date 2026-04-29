@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
         .fallback(handle_fallback)
         .with_state(state.clone());
 
-    let addr = format!("127.0.0.1:{}", args.port);
+    let addr = format!("0.0.0.0:{}", args.port);
     info!("codex-relay listening on {addr} → {}", state.upstream.as_ref());
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
