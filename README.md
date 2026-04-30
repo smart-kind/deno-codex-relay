@@ -19,7 +19,7 @@ curl -fsSL https://deno.land/install.sh | sh
 
 ```bash
 # With environment variables
-CODEX_RELAY_UPSTREAM=https://api.deepseek.com/v1 \
+CODEX_RELAY_UPSTREAM=https://api.deepseek.com \
 CODEX_RELAY_API_KEY=$DEEPSEEK_API_KEY \
 deno run --allow-net --allow-read --allow-env main.ts
 
@@ -46,7 +46,7 @@ env_key = "DUMMY"  # relay 已经持有 API key
 
 | Provider | Base URL |
 |---|---|
-| DeepSeek | `https://api.deepseek.com/v1` |
+| DeepSeek | `https://api.deepseek.com` |
 | Kimi (Moonshot) | `https://api.moonshot.cn/v1` |
 | Qwen | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | Mistral | `https://api.mistral.ai/v1` |
@@ -78,7 +78,7 @@ Any OpenAI-compatible endpoint works.
 
 ```json
 {
-  "upstream": "https://api.deepseek.com/v1",
+  "upstream": "https://api.deepseek.com",
   "api_key": "your-api-key",
   "model_mapping": {
     "gpt-5.4-mini": "deepseek-v4-flash",
@@ -96,10 +96,6 @@ docker run -p 7150:7150 -v ./relay-config.json:/app/relay-config.json:ro codex-r
 # Or with docker-compose
 docker compose up
 ```
-
-## Original Implementation
-
-The original Rust implementation is preserved in `rust/` for reference. It provides the same functionality and can be used if you prefer a compiled binary.
 
 ## Disclaimer
 
