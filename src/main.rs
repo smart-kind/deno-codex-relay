@@ -1,3 +1,4 @@
+mod config;
 mod session;
 mod stream;
 mod translate;
@@ -12,6 +13,7 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
+use config::Config;
 use reqwest::{Client, Url};
 use session::SessionStore;
 use std::sync::Arc;
@@ -24,15 +26,18 @@ struct Args {
     #[arg(long, env = "CODEX_RELAY_PORT", default_value = "4444")]
     port: u16,
 
-    #[arg(
-        long,
-        env = "CODEX_RELAY_UPSTREAM",
-        default_value = "https://openrouter.ai/api/v1"
-    )]
+    /// Upstream API URL. Can also be set in config file (takes precedence).
+    #[arg(long, env = "CODEX_RELAY_UPSTREAM", default_value = "")]
     upstream: String,
 
+    /// API key for upstream. Can also be set in config file (takes precedence).
     #[arg(long, env = "CODEX_RELAY_API_KEY", default_value = "")]
     api_key: String,
+
+    /// Path to JSON config file.
+    /// Example: --config /app/config.json or CODEX_RELAY_CONFIG=/app/config.json
+    #[arg(long, env = "CODEX_RELAY_CONFIG", default_value = "")]
+    config: String,
 }
 
 #[derive(Clone)]
@@ -41,6 +46,7 @@ struct AppState {
     client: Client,
     upstream: Arc<Url>,
     api_key: Arc<String>,
+    model_mapping: Arc<Config>,
 }
 
 #[tokio::main]
@@ -54,13 +60,45 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let upstream = validate_upstream(&args.upstream)?;
+    // Load config file if provided
+    let config = if args.config.is_empty() {
+        Config::default()
+    } else {
+        match Config::load(&args.config) {
+            Ok(c) => {
+                info!("Loaded config from {}: {} model mappings", args.config, c.model_mapping.len());
+                c
+            }
+            Err(e) => {
+                warn!("Failed to load config from {}: {}. Using defaults.", args.config, e);
+                Config::default()
+            }
+        }
+    };
+
+    // Resolve upstream URL: config file > env/CLI > default
+    let upstream_str = config.upstream.as_deref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| {
+            if args.upstream.is_empty() {
+                "https://openrouter.ai/api/v1"
+            } else {
+                &args.upstream
+            }
+        });
+    let upstream = validate_upstream(upstream_str)?;
+
+    // Resolve API key: config file > env/CLI
+    let api_key = config.api_key.as_ref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&args.api_key);
 
     let state = AppState {
         sessions: SessionStore::new(),
         client: Client::new(),
         upstream: Arc::new(upstream),
-        api_key: Arc::new(args.api_key),
+        api_key: Arc::new(api_key.clone()),
+        model_mapping: Arc::new(config),
     };
 
     let app = Router::new()
@@ -96,7 +134,7 @@ fn join_base(url: &Url) -> String {
     if s.ends_with('/') { s.to_string() } else { format!("{s}/") }
 }
 
-/// GET /v1/models — proxy to upstream so Codex gets real model metadata.
+/// GET /v1/models — proxy to upstream and transform model names if mapping configured.
 async fn handle_models(State(state): State<AppState>) -> Response {
     info!("GET /v1/models");
     let url = format!("{}models", join_base(&state.upstream));
@@ -107,7 +145,11 @@ async fn handle_models(State(state): State<AppState>) -> Response {
     match builder.send().await {
         Ok(r) if r.status().is_success() => {
             match r.json::<serde_json::Value>().await {
-                Ok(body) => Json(body).into_response(),
+                Ok(body) => {
+                    // Transform model names in response if mapping is configured
+                    let body = transform_models_response(body, &state.model_mapping);
+                    Json(body).into_response()
+                }
                 Err(e) => {
                     warn!("upstream models: parse error: {e}");
                     Json(serde_json::json!({ "object": "list", "data": [] })).into_response()
@@ -123,6 +165,27 @@ async fn handle_models(State(state): State<AppState>) -> Response {
             Json(serde_json::json!({ "object": "list", "data": [] })).into_response()
         }
     }
+}
+
+/// Transform model IDs in /v1/models response from upstream names to Codex names.
+fn transform_models_response(body: serde_json::Value, mapping: &Config) -> serde_json::Value {
+    if mapping.is_empty() {
+        return body;
+    }
+    let mut result = body;
+    if let Some(data) = result.get_mut("data").and_then(|d| d.as_array_mut()) {
+        for model_obj in data.iter_mut() {
+            if let Some(obj) = model_obj.as_object_mut() {
+                if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
+                    let mapped_id = mapping.to_codex(id);
+                    if mapped_id != id {
+                        obj.insert("id".to_string(), serde_json::Value::String(mapped_id.to_string()));
+                    }
+                }
+            }
+        }
+    }
+    result
 }
 
 /// Catch-all: log unknown requests so we can see what Codex is sending.
@@ -160,8 +223,15 @@ async fn handle_responses_inner(
         .map(|id| state.sessions.get_history(id))
         .unwrap_or_default();
 
-    let model = req.model.clone();
+    // Apply model name mapping: Codex name → upstream name
+    let codex_model = req.model.clone();
+    let upstream_model = state.model_mapping.to_upstream(&codex_model);
+    if upstream_model != codex_model {
+        debug!("model mapping: {} → {}", codex_model, upstream_model);
+    }
+
     let mut chat_req = translate::to_chat_request(&req, history.clone(), &state.sessions);
+    chat_req.model = upstream_model.to_string();  // Use mapped model for upstream
     let url = format!("{}chat/completions", join_base(&state.upstream));
 
     if req.stream {
@@ -177,12 +247,13 @@ async fn handle_responses_inner(
             sessions: state.sessions,
             prior_messages: history,
             request_messages,
-            model,
+            upstream_model: upstream_model.to_string(),
+            codex_model,
         })
         .into_response()
     } else {
         chat_req.stream = false;
-        handle_blocking(state, chat_req, url, model).await
+        handle_blocking(state, chat_req, url, codex_model).await
     }
 }
 
@@ -190,7 +261,7 @@ async fn handle_blocking(
     state: AppState,
     chat_req: types::ChatRequest,
     url: String,
-    model: String,
+    codex_model: String,  // Model name to return in response (Codex's name)
 ) -> Response {
     let mut builder = state
         .client
@@ -239,7 +310,8 @@ async fn handle_blocking(
                 full_history.push(assistant_msg);
                 let response_id = state.sessions.save(full_history);
 
-                let (resp, _) = translate::from_chat_response(response_id, &model, chat_resp);
+                // Use codex_model in response so Codex sees expected name
+                let (resp, _) = translate::from_chat_response(response_id, &codex_model, chat_resp);
                 Json(resp).into_response()
             }
         },

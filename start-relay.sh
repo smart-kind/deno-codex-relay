@@ -1,35 +1,25 @@
 #!/bin/bash
-# Start codex-relay with different upstream providers
+# Start codex-relay with configuration file
 # Usage:
-#   ./start-relay.sh deepseek
-#   ./start-relay.sh dashscope
+#   ./start-relay.sh                    # Uses relay-config.json in current directory
+#   ./start-relay.sh /path/to/config.json
 
-PROVIDER="${1:-deepseek}"
+CONFIG_FILE="${1:-./relay-config.json}"
 
-case "$PROVIDER" in
-  deepseek)
-    export CODEX_RELAY_UPSTREAM=https://api.deepseek.com
-    export CODEX_RELAY_API_KEY=sk-8627083c220d4eed8b03d36e4c51ad9d
-    ;;
-  dashscope|qwen)
-    export CODEX_RELAY_UPSTREAM=https://coding.dashscope.aliyuncs.com/v1
-    export CODEX_RELAY_API_KEY=sk-sp-9e805f192896459cb4d4aaeaf1c47b53
-    ;;
-  *)
-    echo "Unknown provider: $PROVIDER"
-    echo "Usage: $0 {deepseek|dashscope}"
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Config file not found: $CONFIG_FILE"
+    echo "Usage: $0 [config-file-path]"
     exit 1
-    ;;
-esac
+fi
 
 export CODEX_RELAY_PORT=4446
+export CODEX_RELAY_CONFIG="$CONFIG_FILE"
 
 echo "============================================="
 echo "  Starting codex-relay"
 echo "============================================="
-echo "  provider: $PROVIDER"
 echo "  port:     $CODEX_RELAY_PORT"
-echo "  upstream: $CODEX_RELAY_UPSTREAM"
+echo "  config:   $CODEX_RELAY_CONFIG"
 echo "============================================="
 echo ""
 

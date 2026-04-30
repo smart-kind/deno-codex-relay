@@ -33,6 +33,7 @@ Codex CLI → POST /v1/responses (Responses API) → codex-relay → POST /v1/ch
 | Module | Responsibility |
 |--------|---------------|
 | `main.rs` | Axum server, route setup (`/v1/responses`, `/v1/models`, fallback) |
+| `config.rs` | JSON config loading, model name mapping (bidirectional) |
 | `types.rs` | Serde request/response types for both protocols |
 | `translate.rs` | Core bidirectional translation: Responses API → Chat Completions and back |
 | `stream.rs` | SSE streaming: translates upstream Chat Completions SSE into Responses API SSE events |
@@ -53,16 +54,37 @@ Codex CLI → POST /v1/responses (Responses API) → codex-relay → POST /v1/ch
 
 ### Configuration
 
+Configuration via JSON file (recommended) or environment variables.
+
+**JSON config file** (e.g., `relay-config.json`):
+```json
+{
+  "upstream": "https://api.deepseek.com",
+  "api_key": "your-api-key",
+  "model_mapping": {
+    "gpt-5.4-mini": "deepseek-v4-flash",
+    "gpt-5.5": "deepseek-v4-pro"
+  }
+}
+```
+
+Model mapping is bidirectional:
+- **Requests**: Codex model name → mapped to upstream name before sending
+- **Responses**: Upstream model name → mapped back to Codex name in `/v1/models` and SSE events
+
+**Environment variables** (fallbacks if not in config file):
+
 | Variable | Default | Purpose |
 |---|---|---|
-| `CODEX_RELAY_PORT` | `4444` | TCP port |
+| `CODEX_RELAY_PORT` | `4444` | TCP port (fixed, not configurable in JSON) |
 | `CODEX_RELAY_UPSTREAM` | `https://openrouter.ai/api/v1` | Upstream base URL |
 | `CODEX_RELAY_API_KEY` | _(empty)_ | API key forwarded to upstream |
+| `CODEX_RELAY_CONFIG` | _(empty)_ | Path to JSON config file |
 | `RUST_LOG` | `codex_relay=info` | Log verbosity |
+
+**Priority**: Config file values > Environment variables > Defaults
 
 ## Testing Scripts
 
-- `./start-relay.sh deepseek` — start with DeepSeek upstream
-- `./start-relay.sh dashscope` — start with DashScope/Qwen upstream
-- `./test-deepseek-codex.sh deepseek` — test with deepseek-v4-pro model
-- `./test-deepseek-codex.sh dashscope` — test with qwen3.5-plus model
+- `./start-relay.sh` — start with `relay-config.json` in current directory
+- `./start-relay.sh /path/to/config.json` — start with specified config file

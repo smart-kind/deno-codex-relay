@@ -16,7 +16,8 @@ COPY --from=builder /codex-relay /usr/local/bin/codex-relay
 ENV CODEX_RELAY_PORT=4444
 ENV CODEX_RELAY_UPSTREAM=https://openrouter.ai/api/v1
 ENV CODEX_RELAY_API_KEY=
+ENV CODEX_RELAY_CONFIG=
 
 EXPOSE 4444
 
-ENTRYPOINT ["codex-relay", "--port", "4444"]
+ENTRYPOINT ["codex-relay"]

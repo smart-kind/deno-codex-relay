@@ -27,7 +27,12 @@ pub struct StreamArgs {
     /// Used to save correct session history so turn-level reasoning can be
     /// recovered when Codex replays the conversation without previous_response_id.
     pub request_messages: Vec<ChatMessage>,
-    pub model: String,
+    /// Model name sent to upstream provider (may be mapped from Codex name).
+    /// Note: This is already set in chat_req.model; kept here for documentation/debugging.
+    #[allow(dead_code)]
+    pub upstream_model: String,
+    /// Model name to return in SSE events (Codex's expected name).
+    pub codex_model: String,
 }
 
 struct ToolCallAccum {
@@ -57,7 +62,8 @@ pub fn translate_stream(
         sessions,
         prior_messages,
         request_messages,
-        model,
+        upstream_model: _,  // Already used in chat_req.model
+        codex_model,
     } = args;
     let msg_item_id = format!("msg_{}", uuid::Uuid::new_v4().simple());
 
@@ -66,7 +72,7 @@ pub fn translate_stream(
             .event("response.created")
             .data(json!({
                 "type": "response.created",
-                "response": { "id": &response_id, "status": "in_progress", "model": &model }
+                "response": { "id": &response_id, "status": "in_progress", "model": &codex_model }
             }).to_string()));
 
         let mut builder = client.post(&url).header("Content-Type", "application/json");
@@ -306,7 +312,7 @@ pub fn translate_stream(
                 "response": {
                     "id": &response_id,
                     "status": "completed",
-                    "model": &model,
+                    "model": &codex_model,
                     "output": output_items
                 }
             }).to_string()));
