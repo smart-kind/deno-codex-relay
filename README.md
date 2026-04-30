@@ -46,19 +46,19 @@ provider = "deepseek-relay"
 
 **4. Use Codex normally** — it routes through the relay transparently.
 
-## Supported providers
+## 可能支持的 Providers
 
-| Provider | Base URL |
-|---|---|
-| DeepSeek | `https://api.deepseek.com` |
-| Kimi (Moonshot) | `https://api.moonshot.cn/v1` |
-| Qwen | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
-| Mistral | `https://api.mistral.ai/v1` |
-| Groq | `https://api.groq.com/openai/v1` |
-| xAI | `https://api.x.ai/v1` |
-| OpenRouter | `https://openrouter.ai/api/v1` |
+| Provider | Base URL | 已测试 |
+|---|---|---|
+| DeepSeek | `https://api.deepseek.com` | ✓ |
+| Kimi (Moonshot) | `https://api.moonshot.cn/v1` | |
+| Qwen | `https://dashscope.aliyuncs.com/compatible-mode/v1` | |
+| Mistral | `https://api.mistral.ai/v1` | |
+| Groq | `https://api.groq.com/openai/v1` | |
+| xAI | `https://api.x.ai/v1` | |
+| OpenRouter | `https://openrouter.ai/api/v1` | |
 
-Any OpenAI-compatible endpoint works.
+理论上任何 OpenAI-compatible Chat Completions API 都可以工作。
 
 ## Features
 
