@@ -30,15 +30,17 @@ deno run --allow-net --allow-read --allow-env main.ts
 **3. Configure Codex** (`~/.codex/config.toml`)
 
 ```toml
-# 使用映射后的模型名（relay 会将其转换为上游实际名称）
-model = "gpt-5.4-mini"
 model_provider = "deepseek-relay"
 
 [model_providers.deepseek-relay]
 name = "DeepSeek"
-api_base_url = "http://127.0.0.1:7150/v1"
-env_key = "DUMMY"  # relay 已经持有 API key
+base_url = "http://127.0.0.1:17150/v1"
+
+[profiles.ds]
+provider = "deepseek-relay"
 ```
+
+> 注：Docker 映射端口为 `17150:7150`，所以 Codex 连接 `17150`。本地直接运行则用 `7150`。
 
 **4. Use Codex normally** — it routes through the relay transparently.
 
@@ -91,7 +93,7 @@ Any OpenAI-compatible endpoint works.
 
 ```bash
 docker build -t codex-relay .
-docker run -p 7150:7150 -v ./relay-config.json:/app/relay-config.json:ro codex-relay
+docker run -p 17150:7150 -v ./relay-config.json:/app/relay-config.json:ro codex-relay
 
 # Or with docker-compose
 docker compose up
