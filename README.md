@@ -1,57 +1,58 @@
 # codex-relay
 
-A lightweight Rust proxy that translates the OpenAI **Responses API** (used by [Codex CLI](https://github.com/openai/codex)) into the **Chat Completions API**, letting Codex work with any OpenAI-compatible provider — DeepSeek, Kimi, Qwen, Mistral, Groq, xAI, OpenRouter, and more.
+A lightweight Deno proxy that translates the OpenAI **Responses API** (used by [Codex CLI](https://github.com/openai/codex)) into the **Chat Completions API**, letting Codex work with any OpenAI-compatible provider — DeepSeek, Kimi, Qwen, Mistral, Groq, xAI, OpenRouter, and more.
 
 ## Why
 
 Codex CLI speaks the OpenAI Responses API, which is an OpenAI-proprietary stateful protocol. Every other provider exposes the standard Chat Completions API. `codex-relay` sits between Codex and your chosen provider, translating on the fly — no code changes to Codex required.
 
-## Install
-
-```bash
-# From PyPI — prebuilt binary for your platform
-pip install codex-relay
-
-# From crates.io
-cargo install codex-relay
-```
-
 ## Quick start
 
-**1. Start the relay**
+**1. Install Deno** (if not already installed)
 
 ```bash
-CODEX_RELAY_UPSTREAM=https://api.deepseek.com/v1 \
-CODEX_RELAY_API_KEY=$DEEPSEEK_API_KEY \
-CODEX_RELAY_PORT=4446 \
-codex-relay
+# macOS/Linux
+curl -fsSL https://deno.land/install.sh | sh
 ```
 
-**2. Configure Codex** (`~/.codex/config.toml`)
+**2. Start the relay**
+
+```bash
+# With environment variables
+CODEX_RELAY_UPSTREAM=https://api.deepseek.com/v1 \
+CODEX_RELAY_API_KEY=$DEEPSEEK_API_KEY \
+deno run --allow-net --allow-read --allow-env main.ts
+
+# Or with config file
+./start-relay.sh relay-config.json
+```
+
+**3. Configure Codex** (`~/.codex/config.toml`)
 
 ```toml
-model = "deepseek-chat"
+# 使用映射后的模型名（relay 会将其转换为上游实际名称）
+model = "gpt-5.4-mini"
 model_provider = "deepseek-relay"
 
 [model_providers.deepseek-relay]
 name = "DeepSeek"
-api_base_url = "http://127.0.0.1:4446/v1"
-env_key = "DEEPSEEK_API_KEY"
+api_base_url = "http://127.0.0.1:7150/v1"
+env_key = "DUMMY"  # relay 已经持有 API key
 ```
 
-**3. Use Codex normally** — it routes through the relay transparently.
+**4. Use Codex normally** — it routes through the relay transparently.
 
 ## Supported providers
 
-| Provider | Base URL | Suggested port |
-|---|---|---|
-| DeepSeek | `https://api.deepseek.com/v1` | 4446 |
-| Kimi (Moonshot) | `https://api.moonshot.cn/v1` | 4447 |
-| Qwen | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 4448 |
-| Mistral | `https://api.mistral.ai/v1` | 4449 |
-| Groq | `https://api.groq.com/openai/v1` | 4450 |
-| xAI | `https://api.x.ai/v1` | 4451 |
-| OpenRouter | `https://openrouter.ai/api/v1` | 4452 |
+| Provider | Base URL |
+|---|---|
+| DeepSeek | `https://api.deepseek.com/v1` |
+| Kimi (Moonshot) | `https://api.moonshot.cn/v1` |
+| Qwen | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| Mistral | `https://api.mistral.ai/v1` |
+| Groq | `https://api.groq.com/openai/v1` |
+| xAI | `https://api.x.ai/v1` |
+| OpenRouter | `https://openrouter.ai/api/v1` |
 
 Any OpenAI-compatible endpoint works.
 
@@ -62,25 +63,43 @@ Any OpenAI-compatible endpoint works.
 - **Parallel tool calls** — consecutive function_call input items merged into one assistant message
 - **Reasoning models** — preserves `reasoning_content` across turns (Kimi k2.6, DeepSeek-R1)
 - **Model catalog** — proxies `/v1/models` from the upstream provider
+- **Model mapping** — bidirectional model name translation via config
 
 ## Configuration
 
 | Variable | Default | Description |
 |---|---|---|
-| `CODEX_RELAY_PORT` | `4444` | Port to listen on |
+| `CODEX_RELAY_PORT` | `7150` | Port to listen on |
 | `CODEX_RELAY_UPSTREAM` | `https://openrouter.ai/api/v1` | Upstream Chat Completions base URL |
 | `CODEX_RELAY_API_KEY` | _(empty)_ | API key forwarded to upstream |
-| `RUST_LOG` | `codex_relay=info` | Log verbosity |
+| `CODEX_RELAY_CONFIG` | _(empty)_ | Path to JSON config file |
 
-## Python API
+### Config file example (`relay-config.json`)
 
-```python
-from codex_relay import start
-
-proc = start(port=4446, upstream="https://api.deepseek.com/v1", api_key="sk-...")
-# ... use Codex ...
-proc.terminate()
+```json
+{
+  "upstream": "https://api.deepseek.com/v1",
+  "api_key": "your-api-key",
+  "model_mapping": {
+    "gpt-5.4-mini": "deepseek-v4-flash",
+    "gpt-5.5": "deepseek-v4-pro"
+  }
+}
 ```
+
+## Docker
+
+```bash
+docker build -t codex-relay .
+docker run -p 7150:7150 -v ./relay-config.json:/app/relay-config.json:ro codex-relay
+
+# Or with docker-compose
+docker compose up
+```
+
+## Original Implementation
+
+The original Rust implementation is preserved in `rust/` for reference. It provides the same functionality and can be used if you prefer a compiled binary.
 
 ## Disclaimer
 
@@ -89,4 +108,3 @@ This project is **not affiliated with, endorsed by, or sponsored by OpenAI**. "C
 ## License
 
 MIT
-

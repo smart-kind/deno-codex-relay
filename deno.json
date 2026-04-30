@@ -1,0 +1,17 @@
+{
+  "tasks": {
+    "start": "deno run --allow-net --allow-read --allow-env main.ts",
+    "dev": "deno run --watch --allow-net --allow-read --allow-env main.ts",
+    "check": "deno check *.ts",
+    "test": "deno test --allow-net --allow-read --allow-env tests.ts"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "semiColons": true
+  }
+}

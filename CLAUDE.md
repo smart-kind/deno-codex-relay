@@ -4,21 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## What This Is
 
-A lightweight Rust proxy that translates the OpenAI **Responses API** (used by Codex CLI) into the standard **Chat Completions API**, enabling Codex to work with any OpenAI-compatible provider.
+A lightweight Deno proxy that translates the OpenAI **Responses API** (used by Codex CLI) into the standard **Chat Completions API**, enabling Codex to work with any OpenAI-compatible provider.
+
+**Note**: The original Rust implementation is preserved in `rust/` for reference.
 
 ## Quick Commands
 
 ```bash
-cargo build                  # Debug build
-cargo run -- --port 4446     # Start relay locally
-cargo test                   # All unit + integration tests
-cargo test <test_name>       # Single test
-cargo clippy                 # Lint
-cargo fmt                    # Format
-maturin develop              # Build & install Python wheel locally
+deno task start              # Start relay with relay-config.json
+deno task dev                # Start with watch mode
+deno task check              # Type check all files
+./start-relay.sh             # Start with config file
 ```
 
-Verbose logging: `RUST_LOG=codex_relay=debug cargo run`
+Port: **7150** (configurable via `CODEX_RELAY_PORT` environment variable)
 
 ## Architecture
 
@@ -32,17 +31,16 @@ Codex CLI → POST /v1/responses (Responses API) → codex-relay → POST /v1/ch
 
 | Module | Responsibility |
 |--------|---------------|
-| `main.rs` | Axum server, route setup (`/v1/responses`, `/v1/models`, fallback) |
-| `config.rs` | JSON config loading, model name mapping (bidirectional) |
-| `types.rs` | Serde request/response types for both protocols |
-| `translate.rs` | Core bidirectional translation: Responses API → Chat Completions and back |
-| `stream.rs` | SSE streaming: translates upstream Chat Completions SSE into Responses API SSE events |
-| `session.rs` | Session store for multi-turn conversation state and reasoning_content round-trip |
+| `main.ts` | Deno HTTP server, route setup (`/v1/responses`, `/v1/models`, fallback) |
+| `config.ts` | JSON config loading, model name mapping (bidirectional), session store |
+| `types.ts` | TypeScript types for both API protocols |
+| `translate.ts` | Core bidirectional translation: Responses API → Chat Completions and back |
+| `stream.ts` | SSE streaming: translates upstream Chat Completions SSE into Responses API SSE events |
 
 ### Key Flows
 
-1. **Blocking requests**: `handle_responses` → `translate::to_chat_request` → upstream POST → `translate::from_chat_response` → JSON response
-2. **Streaming requests**: Same translation, but `stream::translate_stream` accumulates SSE chunks, emits proper Responses API event sequence (`response.created` → `output_text.delta` → `output_item.done` → `completed`)
+1. **Blocking requests**: `handleResponses` → `toChatRequest` → upstream POST → `fromChatResponse` → JSON response
+2. **Streaming requests**: Same translation, but `translateStream` accumulates SSE chunks, emits proper Responses API event sequence (`response.created` → `output_text.delta` → `output_item.done` → `completed`)
 3. **Tool calls**: Deltas accumulated by index, emitted as grouped `function_call` items
 4. **Session history**: `previous_response_id` → `SessionStore` retrieves prior messages, appends new input, re-sends full conversation to upstream
 
@@ -59,7 +57,7 @@ Configuration via JSON file (recommended) or environment variables.
 **JSON config file** (e.g., `relay-config.json`):
 ```json
 {
-  "upstream": "https://api.deepseek.com",
+  "upstream": "https://api.deepseek.com/v1",
   "api_key": "your-api-key",
   "model_mapping": {
     "gpt-5.4-mini": "deepseek-v4-flash",
@@ -76,15 +74,30 @@ Model mapping is bidirectional:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `CODEX_RELAY_PORT` | `4444` | TCP port (fixed, not configurable in JSON) |
+| `CODEX_RELAY_PORT` | `7150` | TCP port |
 | `CODEX_RELAY_UPSTREAM` | `https://openrouter.ai/api/v1` | Upstream base URL |
 | `CODEX_RELAY_API_KEY` | _(empty)_ | API key forwarded to upstream |
 | `CODEX_RELAY_CONFIG` | _(empty)_ | Path to JSON config file |
-| `RUST_LOG` | `codex_relay=info` | Log verbosity |
 
 **Priority**: Config file values > Environment variables > Defaults
 
-## Testing Scripts
+## Testing
 
-- `./start-relay.sh` — start with `relay-config.json` in current directory
-- `./start-relay.sh /path/to/config.json` — start with specified config file
+```bash
+# Blocking request (使用 Codex 期望的模型名，relay 会自动映射)
+curl -X POST http://localhost:7150/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-5.4-mini","input":"hello"}'
+
+# Streaming request
+curl -X POST http://localhost:7150/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-5.4-mini","input":"hello","stream":true}'
+```
+
+## Docker
+
+```bash
+docker build -t codex-relay .
+docker run -p 7150:7150 -v ./relay-config.json:/app/relay-config.json:ro codex-relay
+```

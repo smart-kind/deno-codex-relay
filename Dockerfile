@@ -1,23 +1,19 @@
-# ── Builder stage ──────────────────────────────────────────
-FROM rust:1.94-slim AS builder
+FROM denoland/deno:latest
 
-WORKDIR /build
+WORKDIR /app
 
-COPY Cargo.toml Cargo.lock ./
-COPY src ./src
+# Copy source files
+COPY deno.json .
+COPY logger.ts .
+COPY types.ts .
+COPY config.ts .
+COPY translate.ts .
+COPY stream.ts .
+COPY main.ts .
+COPY relay-config.example.json .
 
-RUN cargo build --release && cp target/release/codex-relay /codex-relay
+# Expose port
+EXPOSE 7150
 
-# ── Runtime stage ──────────────────────────────────────────
-FROM rust:1.94-slim
-
-COPY --from=builder /codex-relay /usr/local/bin/codex-relay
-
-ENV CODEX_RELAY_PORT=4444
-ENV CODEX_RELAY_UPSTREAM=https://openrouter.ai/api/v1
-ENV CODEX_RELAY_API_KEY=
-ENV CODEX_RELAY_CONFIG=
-
-EXPOSE 4444
-
-ENTRYPOINT ["codex-relay"]
+# Run with necessary permissions
+CMD ["run", "--allow-net", "--allow-read", "--allow-env", "main.ts"]

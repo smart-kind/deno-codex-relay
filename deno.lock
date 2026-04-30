@@ -1,0 +1,53 @@
+{
+  "version": "3",
+  "packages": {
+    "specifiers": {
+      "jsr:@std/assert": "jsr:@std/assert@1.0.19",
+      "jsr:@std/internal@^1.0.12": "jsr:@std/internal@1.0.12"
+    }
+  },
+  "redirects": {
+    "jsr:@std/assert": "https://jsr.io/@std/assert/1.0.19/mod.ts",
+    "jsr:@std/internal@^1.0.12/build-message": "https://jsr.io/@std/internal/1.0.12/build_message.ts",
+    "jsr:@std/internal@^1.0.12/diff": "https://jsr.io/@std/internal/1.0.12/diff.ts",
+    "jsr:@std/internal@^1.0.12/diff-str": "https://jsr.io/@std/internal/1.0.12/diff_str.ts",
+    "jsr:@std/internal@^1.0.12/format": "https://jsr.io/@std/internal/1.0.12/format.ts",
+    "jsr:@std/internal@^1.0.12/styles": "https://jsr.io/@std/internal/1.0.12/styles.ts"
+  },
+  "remote": {
+    "https://jsr.io/@std/assert/1.0.19/almost_equals.ts": "4c69f1e45a4e65bc8aa737baf336e48cf9f9b2697e4db56197895c3d0b9b1fce",
+    "https://jsr.io/@std/assert/1.0.19/array_includes.ts": "2dad64d743ca20af30a869ee7cf08408017bba95f11d3d172c65afc7c4197f0a",
+    "https://jsr.io/@std/assert/1.0.19/assert.ts": "577cd3382908011da36639d019d9be54340e7e388b6db599425de0e977894318",
+    "https://jsr.io/@std/assert/1.0.19/assertion_error.ts": "7082ae41b34eb0bc9054d8f2867996d0593af80904f98bfc0ad4f27b98f00d91",
+    "https://jsr.io/@std/assert/1.0.19/equal.ts": "084be4c5911482a2c38431a6341db9c816677e0a277a8ced2c4c5a4cda4d4394",
+    "https://jsr.io/@std/assert/1.0.19/equals.ts": "3621d3bfbef47b6a11709de0544dcce0b2c6626123fa379a4c54301f44090a8e",
+    "https://jsr.io/@std/assert/1.0.19/exists.ts": "f94c2c43e8657413c4a0ff8f0c6d0f4eb90b83e7bf5f22bcaffc6ee504093948",
+    "https://jsr.io/@std/assert/1.0.19/fail.ts": "b7c2756c2444c546ef23477f828c5c848a4de529a128eece1ebb080480676434",
+    "https://jsr.io/@std/assert/1.0.19/false.ts": "7891e342f1c36244161cf21f554ab381fdb1df23acdd5df29e16a990129fc9b8",
+    "https://jsr.io/@std/assert/1.0.19/greater.ts": "18a798d5afafb0d47d8baa8a2f598df79e3bb7939937c866802a7d5f6908298a",
+    "https://jsr.io/@std/assert/1.0.19/greater_or_equal.ts": "b4eb8147e519b7c6a46daee132908921a8e1566cea4592945aa7800811cc259a",
+    "https://jsr.io/@std/assert/1.0.19/instance_of.ts": "2c4e16ee181f424b91d27f26e7fd5bd493864ad1987c33ccb06f3eb6710c87e3",
+    "https://jsr.io/@std/assert/1.0.19/is_error.ts": "36323f0da5b789e9be40313059e5fb3224fb81d35fa636aecc0fcf534a1f345e",
+    "https://jsr.io/@std/assert/1.0.19/less.ts": "c578b053e2c554a37923885c829a9bcbaedefaf18fe812addc871f6f02d0fe1a",
+    "https://jsr.io/@std/assert/1.0.19/less_or_equal.ts": "9d9eb025efa49ded1459c58288b6b9399448216db842bc59146181dd77c091e1",
+    "https://jsr.io/@std/assert/1.0.19/match.ts": "b39df7aa77e4ed43e1823fd7ac6bb31229464ca7e853aa9ff1acfcf06ad54523",
+    "https://jsr.io/@std/assert/1.0.19/mod.ts": "c3fc0e0ff82dbeb6c2274dfc5ff3a90830834dcb0400e2d7f69380cfb8b9ec5d",
+    "https://jsr.io/@std/assert/1.0.19/not_equals.ts": "9e376d5009eae6053d78522da3de7ceab90469861d868de655bf53f68f4b9964",
+    "https://jsr.io/@std/assert/1.0.19/not_instance_of.ts": "f2ee2c8d8a591c53aebdf6a6ff24450024f15cbf8f46edde790b5dc6280d4c9a",
+    "https://jsr.io/@std/assert/1.0.19/not_match.ts": "7e00371062defbb5ceaede29015d5de75bb832c3125727229f7d3b7f22bc15c6",
+    "https://jsr.io/@std/assert/1.0.19/not_strict_equals.ts": "8bb7f371a888cdb69016131611d467729e3e62a65b24f059ed186358b83c069c",
+    "https://jsr.io/@std/assert/1.0.19/object_match.ts": "4858f036c4977694488f6467e13d84414d2cfdd924efaa53a4ffe08a5e982468",
+    "https://jsr.io/@std/assert/1.0.19/rejects.ts": "44c36f9424baa7e81c305dcd930f33585ee9408a2fa94e900a30c18da3459149",
+    "https://jsr.io/@std/assert/1.0.19/strict_equals.ts": "92145ed74ffa8c96a2407754634c840f3ac2bc033236552a37f7b7d3d317917f",
+    "https://jsr.io/@std/assert/1.0.19/string_includes.ts": "c6921a2799299235c662f28929ffe1e08f429892e8d28ee9307ada38d90d1f1f",
+    "https://jsr.io/@std/assert/1.0.19/throws.ts": "0ef612c1624f0b0b4b6e07320bd24dcd5094077774c0fe608f897682b772822b",
+    "https://jsr.io/@std/assert/1.0.19/unimplemented.ts": "13341d1f065390d682450c185bd2cc3241f05d952fb45437b450f4b1f004ca1c",
+    "https://jsr.io/@std/assert/1.0.19/unreachable.ts": "bf47aa8b78e2eb19550a1ffe2fef74e2cca804b19fa64cffecef9a4ae4dd47d2",
+    "https://jsr.io/@std/internal/1.0.12/build_message.ts": "51cd9a8d92a827770b2edd6b841a83517bd190016ba903eddc0a0c566f414e7a",
+    "https://jsr.io/@std/internal/1.0.12/diff.ts": "8a75475658ad5a0210ce59c8f71c1df9a654a714809c1fef5f6533572f7907a7",
+    "https://jsr.io/@std/internal/1.0.12/diff_str.ts": "4ae2e93b8c19c113ef833b264f41040de824940eed363f7f789a679708a0c5fe",
+    "https://jsr.io/@std/internal/1.0.12/format.ts": "b83e00ef56b07adeaa59498e37f3609d7535a743459e7da05e434cdf434bbe51",
+    "https://jsr.io/@std/internal/1.0.12/styles.ts": "9bcd79843151e58b174e5ef4a8be1711dd7fa0596b490ee580dc130f071039d8",
+    "https://jsr.io/@std/internal/1.0.12/types.ts": "878c9447273b628afa10c9bc2ae79a64df7e3e5c85848bcb7ce017fd6d45a52f"
+  }
+}

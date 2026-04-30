@@ -1,8 +1,16 @@
-/target
+# Rust 编译产物（保留在 rust/ 目录）
+rust/target/
+
+# Python
 __pycache__/
 *.pyc
 dist/
 *.egg-info/
 .venv/
 
+# Deno
+.deno/
+
+# 配置文件（包含敏感信息）
 settings.json**
+relay-config.json

@@ -5,5 +5,9 @@
     "gpt-5.4-mini": "deepseek-v4-flash",
     "gpt-5.5": "deepseek-v4-pro",
     "gpt-4.1": "deepseek-v4-flash"
+  },
+  "log": {
+    "level": "info",
+    "truncate_length": 200
   }
 }

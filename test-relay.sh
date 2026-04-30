@@ -1,13 +1,13 @@
 #!/bin/bash
-# Test codex-relay endpoints
+# Test codex-relay (Deno) endpoints
 # Usage:
-#   ./test-deepseek-codex.sh deepseek
-#   ./test-deepseek-codex.sh dashscope
-#   ./test-deepseek-codex.sh qwen
+#   ./test-relay.sh deepseek
+#   ./test-relay.sh dashscope
+#   ./test-relay.sh qwen
 
 PROVIDER="${1:-deepseek}"
 
-BASE="http://127.0.0.1:4446"
+BASE="http://127.0.0.1:7150"
 
 case "$PROVIDER" in
   deepseek)
@@ -18,13 +18,13 @@ case "$PROVIDER" in
     ;;
   *)
     echo "Unknown provider: $PROVIDER"
-    echo "Usage: $0 {deepseek|dashscope}"
+    echo "Usage: $0 {deepseek|dashscope|qwen}"
     exit 1
     ;;
 esac
 
 echo "============================================="
-echo "  codex-relay endpoint test"
+echo "  codex-relay (Deno) endpoint test"
 echo "============================================="
 echo "  provider: $PROVIDER"
 echo "  model:    $MODEL"
@@ -39,8 +39,22 @@ echo ""
 echo "---"
 echo ""
 
-# ── 2. POST /v1/responses (streaming) ──────────────
-echo ">> POST /v1/responses  (model=$MODEL, stream=true)"
+# ── 2. POST /v1/responses (blocking) ──────────────
+echo ">> POST /v1/responses (model=$MODEL, stream=false)"
+echo "---"
+curl -s -X POST "$BASE/v1/responses" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"$MODEL\",
+    \"input\": \"你好，请简短回复\",
+    \"stream\": false
+  }" | python3 -m json.tool 2>/dev/null
+echo ""
+echo "---"
+echo ""
+
+# ── 3. POST /v1/responses (streaming) ──────────────
+echo ">> POST /v1/responses (model=$MODEL, stream=true)"
 echo "---"
 curl -s -X POST "$BASE/v1/responses" \
   -H "Content-Type: application/json" \
