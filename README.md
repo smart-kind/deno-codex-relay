@@ -34,13 +34,15 @@ model_provider = "deepseek-relay"
 
 [model_providers.deepseek-relay]
 name = "DeepSeek"
-base_url = "http://127.0.0.1:17150/v1"
+base_url = "http://127.0.0.1:17150/v1"  # 本地测试
 
 [profiles.ds]
 provider = "deepseek-relay"
 ```
 
-> 注：Docker 映射端口为 `17150:7150`，所以 Codex 连接 `17150`。本地直接运行则用 `7150`。
+> **部署说明**：
+> - 本地测试：`base_url = "http://127.0.0.1:17150/v1"`
+> - VPS 部署：将 `127.0.0.1` 改为服务器实际 IP 或域名，如 `http://your-server.com:17150/v1`
 
 **4. Use Codex normally** — it routes through the relay transparently.
 
