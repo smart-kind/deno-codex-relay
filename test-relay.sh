@@ -1,24 +1,42 @@
 #!/bin/bash
 # Test codex-relay (Deno) endpoints
 # Usage:
-#   ./test-relay.sh deepseek
-#   ./test-relay.sh dashscope
-#   ./test-relay.sh qwen
+#   ./test-relay.sh [target] [provider]
+#   ./test-relay.sh              # 本地 7150, deepseek
+#   ./test-relay.sh docker       # 本地 Docker 17150, deepseek
+#   ./test-relay.sh remote       # 远程 ds.crazyamber.com, deepseek
+#   ./test-relay.sh local dashscope  # 本地 7150, dashscope
 
-PROVIDER="${1:-deepseek}"
+TARGET="${1:-local}"
+PROVIDER="${2:-deepseek}"
 
-BASE="http://127.0.0.1:7150"
+case "$TARGET" in
+  local)
+    BASE="http://127.0.0.1:7150"
+    ;;
+  docker)
+    BASE="http://127.0.0.1:17150"
+    ;;
+  remote|ds)
+    BASE="https://ds.crazyamber.com"
+    ;;
+  *)
+    echo "Unknown target: $TARGET"
+    echo "Usage: $0 [local|docker|remote] [deepseek|dashscope|qwen]"
+    exit 1
+    ;;
+esac
 
 case "$PROVIDER" in
   deepseek)
-    MODEL="deepseek-v4-pro"
+    MODEL="gpt-5.4-mini"
     ;;
   dashscope|qwen)
     MODEL="qwen3.5-plus"
     ;;
   *)
     echo "Unknown provider: $PROVIDER"
-    echo "Usage: $0 {deepseek|dashscope|qwen}"
+    echo "Usage: $0 [local|docker|remote] [deepseek|dashscope|qwen]"
     exit 1
     ;;
 esac
@@ -26,6 +44,8 @@ esac
 echo "============================================="
 echo "  codex-relay (Deno) endpoint test"
 echo "============================================="
+echo "  target:   $TARGET"
+echo "  base:     $BASE"
 echo "  provider: $PROVIDER"
 echo "  model:    $MODEL"
 echo "============================================="
