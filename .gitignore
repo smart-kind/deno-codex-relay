@@ -15,5 +15,8 @@ dist/
 settings.json**
 relay-config.json
 
+# Data directory (user logs and usage tracking)
+data/
+
 claude-commands-sample
 gitea-workflow-sample

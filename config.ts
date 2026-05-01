@@ -9,32 +9,60 @@ export interface LogConfigJson {
   truncate_length?: number;
 }
 
+export interface UserConfig {
+  name: string;
+  api_key: string;
+  usage_limit?: number;  // tokens, undefined means no limit
+}
+
 export interface ConfigJson {
   upstream?: string;
   api_key?: string;
+  fallback_api_key?: string;
   model_mapping?: Record<string, string>;
   log?: LogConfigJson;
+  users?: UserConfig[];
+  data_dir?: string;
 }
 
 export class Config {
   upstream: string;
   apiKey: string;
+  fallbackApiKey: string;
   modelMapping: Record<string, string>;
   logLevel: "debug" | "info" | "warn" | "error";
   logTruncateLength: number;
+  users: Map<string, UserConfig>;  // api_key -> UserConfig
+  dataDir: string;
 
   constructor(
     upstream: string,
     apiKey: string,
+    fallbackApiKey: string = "",
     modelMapping: Record<string, string> = {},
+    users: UserConfig[] = [],
+    dataDir: string = "./data",
     logLevel: "debug" | "info" | "warn" | "error" = "info",
     logTruncateLength: number = 200
   ) {
     this.upstream = upstream;
     this.apiKey = apiKey;
+    this.fallbackApiKey = fallbackApiKey;
     this.modelMapping = modelMapping;
+    this.users = new Map(users.map(u => [u.api_key, u]));
+    this.dataDir = dataDir;
     this.logLevel = logLevel;
     this.logTruncateLength = logTruncateLength;
+  }
+
+  /// Get user by their API key
+  getUserByApiKey(apiKey: string): UserConfig | undefined {
+    return this.users.get(apiKey);
+  }
+
+  /// Check if fallback API key is configured
+  hasFallback(): boolean {
+    return !!this.fallbackApiKey && this.fallbackApiKey.length > 0;
   }
 
   /// Load configuration from a JSON file, with environment variable fallbacks.
@@ -60,7 +88,17 @@ export class Config {
       Deno.env.get("CODEX_RELAY_API_KEY") ||
       "";
 
+    const fallbackApiKey = json.fallback_api_key ||
+      Deno.env.get("CODEX_RELAY_FALLBACK_API_KEY") ||
+      "";
+
     const modelMapping = json.model_mapping || {};
+
+    const users = json.users || [];
+
+    const dataDir = json.data_dir ||
+      Deno.env.get("CODEX_RELAY_DATA_DIR") ||
+      "./data";
 
     const logLevel = json.log?.level ||
       (Deno.env.get("LOG_LEVEL") as "debug" | "info" | "warn" | "error") ||
@@ -72,7 +110,16 @@ export class Config {
     // 初始化 logger
     initLogger({ level: logLevel, truncate_length: logTruncateLength });
 
-    return new Config(upstream, apiKey, modelMapping, logLevel, logTruncateLength);
+    return new Config(
+      upstream,
+      apiKey,
+      fallbackApiKey,
+      modelMapping,
+      users,
+      dataDir,
+      logLevel,
+      logTruncateLength
+    );
   }
 
   /// Map a Codex model name to the upstream provider's model name.

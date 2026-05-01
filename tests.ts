@@ -17,7 +17,7 @@ Deno.test("Config.load() 加载配置文件", () => {
 });
 
 Deno.test("Config.toUpstream() 映射模型名", () => {
-  const config = new Config("https://api.test.com", "key", {
+  const config = new Config("https://api.test.com", "key", "", {
     "gpt-5.4-mini": "deepseek-v4-flash",
   });
   assertEquals(config.toUpstream("gpt-5.4-mini"), "deepseek-v4-flash");
@@ -25,7 +25,7 @@ Deno.test("Config.toUpstream() 映射模型名", () => {
 });
 
 Deno.test("Config.toCodex() 反向映射模型名", () => {
-  const config = new Config("https://api.test.com", "key", {
+  const config = new Config("https://api.test.com", "key", "", {
     "gpt-5.4-mini": "deepseek-v4-flash",
   });
   assertEquals(config.toCodex("deepseek-v4-flash"), "gpt-5.4-mini");

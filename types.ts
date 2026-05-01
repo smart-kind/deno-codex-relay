@@ -111,3 +111,52 @@ export interface SSEEvent {
   event: string;
   data: string;
 }
+
+// ── Usage tracking types ────────────────────────────────────────────────────────────
+
+export interface UsageRecord {
+  user: string;
+  timestamp: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  model: string;
+  upstream_model: string;
+  link_type: "primary" | "fallback";
+  request_id: string;
+  fallback_reason?: string;
+}
+
+export interface UserUsage {
+  user: string;
+  total_tokens: number;
+  total_requests: number;
+  primary_tokens: number;
+  fallback_tokens: number;
+  last_updated: string;
+}
+
+export interface ChatLogEntry {
+  timestamp: string;
+  user: string;
+  request_id: string;
+  model: string;
+  upstream_model: string;
+  link_type: "primary" | "fallback";
+  request: unknown;
+  response: unknown;
+  usage?: { input_tokens: number; output_tokens: number };
+  fallback_reason?: string;
+}
+
+export interface SystemErrorEntry {
+  timestamp: string;
+  type: "upstream_error" | "model_mapping_missing" | "unexpected_exception";
+  error: string;
+  upstream?: string;
+  model?: string;
+  request_id?: string;
+  user?: string;
+  stack?: string;
+  context?: string;
+}

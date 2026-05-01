@@ -6,5 +6,6 @@ services:
       - "17150:7150"
     volumes:
       - ./relay-config.json:/app/relay-config.json:ro
+      - ./data:/app/data
     environment:
       - RUST_LOG=info

@@ -1,6 +1,7 @@
 {
   "upstream": "https://api.deepseek.com",
-  "api_key": "",
+  "api_key": "sk-primary-api-key",
+  "fallback_api_key": "sk-fallback-api-key",
   "model_mapping": {
     "gpt-5.4-mini": "deepseek-v4-flash",
     "gpt-5.5": "deepseek-v4-pro",
@@ -9,5 +10,18 @@
   "log": {
     "level": "info",
     "truncate_length": 200
-  }
+  },
+  "data_dir": "./data",
+  "users": [
+    {
+      "name": "alice",
+      "api_key": "sk-user-alice-key",
+      "usage_limit": 10000000
+    },
+    {
+      "name": "bob",
+      "api_key": "sk-user-bob-key",
+      "usage_limit": 5000000
+    }
+  ]
 }
