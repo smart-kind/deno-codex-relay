@@ -8,27 +8,6 @@ jobs:
   deploy:
     runs-on: ubuntu_host
     steps:
-      - name: 读取版本号并设置环境变量
-        run: |
-          cd /opt/deploy/gitea/apps/codex-relay
-          VERSION=$(jq -r '.version' deno.json)
-          echo "APP_VERSION=$VERSION" >> $GITEA_ENV
-          echo "=== 版本号: $VERSION ==="
-
-      - name: 创建并推送git tag
-        run: |
-          cd /opt/deploy/gitea/apps/codex-relay
-          VERSION=$(jq -r '.version' deno.json)
-          TAG="v$VERSION"
-          # 检查tag是否已存在
-          if git tag -l "$TAG" | grep -q "$TAG"; then
-            echo "Tag $TAG 已存在，跳过"
-          else
-            git tag "$TAG"
-            git push origin "$TAG"
-            echo "=== 已创建tag: $TAG ==="
-          fi
-
       - name: 部署到固定目录
         run: |
           set -e
@@ -64,6 +43,33 @@ jobs:
           # 显示当前版本
           echo "=== 部署版本 ==="
           git log -1 --oneline
+
+      - name: 读取版本号并设置环境变量
+        run: |
+          cd /opt/deploy/gitea/apps/codex-relay
+          VERSION=$(jq -r '.version' deno.json)
+          echo "APP_VERSION=$VERSION" >> $GITEA_ENV
+          echo "=== 版本号: $VERSION ==="
+
+      - name: 创建并推送git tag
+        run: |
+          cd /opt/deploy/gitea/apps/codex-relay
+          VERSION=$(jq -r '.version' deno.json)
+          TAG="v$VERSION"
+          # 检查tag是否已存在
+          if git tag -l "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG 已存在，跳过"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "=== 已创建tag: $TAG ==="
+          fi
+
+      - name: 复制配置并构建容器
+        run: |
+          set -e
+          DEPLOY_DIR="/opt/deploy/gitea/apps/codex-relay"
+          cd $DEPLOY_DIR
 
           # 复制relay-config.json（从VPS预设位置）
           if [ -f "/opt/deploy/gitea/envs/codex-relay.env" ]; then
