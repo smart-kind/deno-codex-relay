@@ -10,6 +10,10 @@
 TARGET="${1:-local}"
 PROVIDER="${2:-deepseek}"
 
+# API key for authentication (required for all endpoints)
+# For local testing, use the key from relay-config.json
+API_KEY="${CODEX_RELAY_TEST_KEY:-sk-test-david-key}"
+
 case "$TARGET" in
   local)
     BASE="http://127.0.0.1:7150"
@@ -19,6 +23,8 @@ case "$TARGET" in
     ;;
   remote|ds)
     BASE="https://ds.crazyamber.com"
+    # For remote, use environment variable or prompt
+    API_KEY="${CODEX_RELAY_REMOTE_KEY:-$API_KEY}"
     ;;
   *)
     echo "Unknown target: $TARGET"
@@ -48,13 +54,22 @@ echo "  target:   $TARGET"
 echo "  base:     $BASE"
 echo "  provider: $PROVIDER"
 echo "  model:    $MODEL"
+echo "  api_key:  ${API_KEY:0:8}..."
 echo "============================================="
+echo ""
+
+# ── 0. GET /status (usage check) ──────────────────────────────
+echo ">> GET /status"
+echo "---"
+curl -s -H "Authorization: Bearer $API_KEY" "$BASE/status" | python3 -m json.tool 2>/dev/null || curl -s -H "Authorization: Bearer $API_KEY" "$BASE/status"
+echo ""
+echo "---"
 echo ""
 
 # ── 1. GET /v1/models ──────────────────────────────
 echo ">> GET /v1/models"
 echo "---"
-curl -s "$BASE/v1/models" | python3 -m json.tool 2>/dev/null || curl -s "$BASE/v1/models"
+curl -s -H "Authorization: Bearer $API_KEY" "$BASE/v1/models" | python3 -m json.tool 2>/dev/null || curl -s -H "Authorization: Bearer $API_KEY" "$BASE/v1/models"
 echo ""
 echo "---"
 echo ""
@@ -63,6 +78,7 @@ echo ""
 echo ">> POST /v1/responses (model=$MODEL, stream=false)"
 echo "---"
 curl -s -X POST "$BASE/v1/responses" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"$MODEL\",
@@ -77,12 +93,21 @@ echo ""
 echo ">> POST /v1/responses (model=$MODEL, stream=true)"
 echo "---"
 curl -s -X POST "$BASE/v1/responses" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"$MODEL\",
     \"input\": \"你好，请简短回复\",
     \"stream\": true
   }"
+echo ""
+echo "---"
+echo ""
+
+# ── 4. Final usage check ──────────────────────────────
+echo ">> GET /status (final usage)"
+echo "---"
+curl -s -H "Authorization: Bearer $API_KEY" "$BASE/status" | python3 -m json.tool 2>/dev/null || curl -s -H "Authorization: Bearer $API_KEY" "$BASE/status"
 echo ""
 echo "---"
 echo ""
