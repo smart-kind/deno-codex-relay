@@ -130,6 +130,8 @@ export interface UsageRecord {
 export interface UserUsage {
   user: string;
   total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
   total_requests: number;
   primary_tokens: number;
   fallback_tokens: number;

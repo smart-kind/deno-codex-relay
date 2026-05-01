@@ -52,7 +52,13 @@ export async function appendChatLog(
 export async function updateUsageJson(
   dataDir: string,
   username: string,
-  increment: { tokens: number; requests: number; link_type: "primary" | "fallback" }
+  increment: {
+    tokens: number;
+    input_tokens: number;
+    output_tokens: number;
+    requests: number;
+    link_type: "primary" | "fallback";
+  }
 ): Promise<void> {
   const userDir = await ensureUserDir(dataDir, username);
   const filePath = `${userDir}/usage.json`;
@@ -60,6 +66,8 @@ export async function updateUsageJson(
   let usage: UserUsage = {
     user: username,
     total_tokens: 0,
+    input_tokens: 0,
+    output_tokens: 0,
     total_requests: 0,
     primary_tokens: 0,
     fallback_tokens: 0,
@@ -70,6 +78,9 @@ export async function updateUsageJson(
   try {
     const content = await Deno.readTextFile(filePath);
     usage = JSON.parse(content);
+    // 兼容旧数据：如果缺少 input_tokens/output_tokens，从 total_tokens 推算
+    if (usage.input_tokens === undefined) usage.input_tokens = 0;
+    if (usage.output_tokens === undefined) usage.output_tokens = 0;
     log.debug("读取现有用量", { filePath, total_tokens: usage.total_tokens });
   } catch {
     // File doesn't exist, use default
@@ -78,6 +89,8 @@ export async function updateUsageJson(
 
   // Update values
   usage.total_tokens += increment.tokens;
+  usage.input_tokens += increment.input_tokens;
+  usage.output_tokens += increment.output_tokens;
   usage.total_requests += increment.requests;
   if (increment.link_type === "primary") {
     usage.primary_tokens += increment.tokens;
@@ -102,12 +115,18 @@ export async function readUsageJson(dataDir: string, username: string): Promise<
 
   try {
     const content = await Deno.readTextFile(filePath);
-    return JSON.parse(content);
+    const usage = JSON.parse(content);
+    // 兼容旧数据：如果缺少 input_tokens/output_tokens，设为 0
+    if (usage.input_tokens === undefined) usage.input_tokens = 0;
+    if (usage.output_tokens === undefined) usage.output_tokens = 0;
+    return usage;
   } catch {
     // File doesn't exist, return default
     return {
       user: username,
       total_tokens: 0,
+      input_tokens: 0,
+      output_tokens: 0,
       total_requests: 0,
       primary_tokens: 0,
       fallback_tokens: 0,

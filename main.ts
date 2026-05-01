@@ -477,6 +477,8 @@ async function handleStatus(user: UserConfig): Promise<Response> {
     user: user.name,
     usage: {
       total_tokens: usage.total_tokens,
+      input_tokens: usage.input_tokens,
+      output_tokens: usage.output_tokens,
       total_requests: usage.total_requests,
       primary_tokens: usage.primary_tokens,
       fallback_tokens: usage.fallback_tokens,

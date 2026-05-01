@@ -625,24 +625,32 @@ Deno.test("updateUsageJson() 更新 usage.json", async () => {
   // 第一次更新
   await updateUsageJson(dataDir, username, {
     tokens: 50,
+    input_tokens: 30,
+    output_tokens: 20,
     requests: 1,
     link_type: "primary",
   });
 
   let usage = await readUsageJson(dataDir, username);
   assertEquals(usage.total_tokens, 50);
+  assertEquals(usage.input_tokens, 30);
+  assertEquals(usage.output_tokens, 20);
   assertEquals(usage.total_requests, 1);
   assertEquals(usage.primary_tokens, 50);
 
   // 第二次更新（累加）
   await updateUsageJson(dataDir, username, {
     tokens: 30,
+    input_tokens: 15,
+    output_tokens: 15,
     requests: 1,
     link_type: "fallback",
   });
 
   usage = await readUsageJson(dataDir, username);
   assertEquals(usage.total_tokens, 80);
+  assertEquals(usage.input_tokens, 45);
+  assertEquals(usage.output_tokens, 35);
   assertEquals(usage.total_requests, 2);
   assertEquals(usage.primary_tokens, 50);
   assertEquals(usage.fallback_tokens, 30);

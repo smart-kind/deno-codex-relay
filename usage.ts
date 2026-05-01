@@ -19,6 +19,8 @@ export class UsageStore {
     const tokens = record.total_tokens;
     await updateUsageJson(this.dataDir, record.user, {
       tokens,
+      input_tokens: record.input_tokens,
+      output_tokens: record.output_tokens,
       requests: 1,
       link_type: record.link_type,
     });
@@ -27,12 +29,16 @@ export class UsageStore {
     const cached = this.cache.get(record.user) || {
       user: record.user,
       total_tokens: 0,
+      input_tokens: 0,
+      output_tokens: 0,
       total_requests: 0,
       primary_tokens: 0,
       fallback_tokens: 0,
       last_updated: new Date().toISOString(),
     };
     cached.total_tokens += tokens;
+    cached.input_tokens += record.input_tokens;
+    cached.output_tokens += record.output_tokens;
     cached.total_requests += 1;
     if (record.link_type === "primary") {
       cached.primary_tokens += tokens;
@@ -45,6 +51,8 @@ export class UsageStore {
     log.info("用量已记录", {
       user: record.user,
       tokens,
+      input: record.input_tokens,
+      output: record.output_tokens,
       link_type: record.link_type,
       total: cached.total_tokens,
     });
