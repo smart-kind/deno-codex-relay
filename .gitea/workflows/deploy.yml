@@ -1,0 +1,107 @@
+name: Deploy codex-relay to VPS
+
+on:
+  push:
+    branches: [ release ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu_host
+    steps:
+      - name: 读取版本号并设置环境变量
+        run: |
+          cd /opt/deploy/gitea/apps/codex-relay
+          VERSION=$(jq -r '.version' deno.json)
+          echo "APP_VERSION=$VERSION" >> $GITEA_ENV
+          echo "=== 版本号: $VERSION ==="
+
+      - name: 创建并推送git tag
+        run: |
+          cd /opt/deploy/gitea/apps/codex-relay
+          VERSION=$(jq -r '.version' deno.json)
+          TAG="v$VERSION"
+          # 检查tag是否已存在
+          if git tag -l "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG 已存在，跳过"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "=== 已创建tag: $TAG ==="
+          fi
+
+      - name: 部署到固定目录
+        run: |
+          set -e
+          DEPLOY_DIR="/opt/deploy/gitea/apps/codex-relay"
+          REPO_URL="https://git.crazyamber.com/crazy.amber.studio/codex-relay.git"
+          BRANCH="release"
+
+          echo "=== 部署目录: $DEPLOY_DIR ==="
+
+          # 如果目录不存在，clone代码
+          if [ ! -d "$DEPLOY_DIR" ]; then
+            echo "目录不存在，开始克隆..."
+            mkdir -p /opt/deploy/gitea/apps
+            cd /opt/deploy/gitea/apps
+            git clone -b $BRANCH $REPO_URL codex-relay
+          fi
+
+          cd $DEPLOY_DIR
+          echo "=== 当前目录: $(pwd) ==="
+
+          # 确保origin指向正确的仓库
+          CURRENT_ORIGIN=$(git remote get-url origin 2>/dev/null || echo "")
+          if [ "$CURRENT_ORIGIN" != "$REPO_URL" ]; then
+            echo "修正origin地址: $CURRENT_ORIGIN -> $REPO_URL"
+            git remote set-url origin $REPO_URL
+          fi
+
+          # 拉取最新代码
+          echo "=== 拉取最新代码 ==="
+          git fetch origin
+          git reset --hard origin/$BRANCH
+
+          # 显示当前版本
+          echo "=== 部署版本 ==="
+          git log -1 --oneline
+
+          # 复制relay-config.json（从VPS预设位置）
+          if [ -f "/opt/deploy/gitea/envs/codex-relay.env" ]; then
+            cp /opt/deploy/gitea/envs/codex-relay.env "$DEPLOY_DIR/relay-config.json"
+            echo "=== 已复制relay-config.json ==="
+          else
+            echo "警告: /opt/deploy/gitea/envs/codex-relay.env 不存在，请手动配置"
+          fi
+
+          # 构建并启动
+          echo "=== 构建并启动容器 ==="
+          docker compose down -v
+          docker compose up -d --build
+
+          # 等待启动
+          echo "=== 等待容器启动（10秒）==="
+          sleep 10
+
+          # 健康检查
+          echo "=== 健康检查 ==="
+          for i in 1 2 3 4 5; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:17150/ || echo "000")
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "307" ] || [ "$HTTP_CODE" = "404" ]; then
+              echo "✅ 健康检查通过 (HTTP $HTTP_CODE)"
+              break
+            fi
+            echo "第 $i 次检查失败 (HTTP $HTTP_CODE)，等待5秒..."
+            sleep 5
+          done
+
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "307" ] && [ "$HTTP_CODE" != "404" ]; then
+            echo "❌ 健康检查失败"
+            docker compose logs --tail 30
+            exit 1
+          fi
+
+          # 清理旧镜像
+          echo "=== 清理旧镜像 ==="
+          docker image prune -f
+
+          echo "✅ 部署完成"
