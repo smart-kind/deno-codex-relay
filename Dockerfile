@@ -21,5 +21,5 @@ RUN mkdir -p /app/data
 # Expose port
 EXPOSE 7150
 
-# Run with necessary permissions (added --allow-write for data directory)
+# Run with necessary permissions
 CMD ["run", "--allow-net", "--allow-read", "--allow-write", "--allow-env", "main.ts"]

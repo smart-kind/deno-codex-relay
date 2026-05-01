@@ -1,11 +1,12 @@
 services:
-  deno-deepseek:
+  codex-relay:
     build: .
-    container_name: codex-relay-deno
+    container_name: codex-relay
     ports:
       - "17150:7150"
     volumes:
       - ./relay-config.json:/app/relay-config.json:ro
       - ./data:/app/data
     environment:
-      - RUST_LOG=info
+      - LOG_LEVEL=info
+    restart: unless-stopped
