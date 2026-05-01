@@ -14,3 +14,6 @@ dist/
 # 配置文件（包含敏感信息）
 settings.json**
 relay-config.json
+
+claude-commands-sample
+gitea-workflow-sample
