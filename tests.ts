@@ -7,11 +7,11 @@ import { appendChatLog, updateUsageJson, appendSystemError, readUsageJson } from
 import type { ResponsesRequest, ChatMessage, ChatResponse } from "./types.ts";
 import type { UserConfig } from "./config.ts";
 
-// 测试端口：从环境变量读取，默认 Docker 外部端口 17150
-const TEST_PORT = parseInt(Deno.env.get("TEST_PORT") || "17150");
-const BASE_URL = `http://localhost:${TEST_PORT}`;
+// 测试 URL：从环境变量读取，默认本地 Docker
+const TEST_URL = Deno.env.get("TEST_URL") || "http://localhost:17150";
+const BASE_URL = TEST_URL;
 
-// 测试 API key：从环境变量读取，默认使用 relay-config.json 中的测试用户
+// 测试 API key：从环境变量读取
 const TEST_API_KEY = Deno.env.get("TEST_API_KEY") || "sk-test-david-key";
 
 // ── 配置测试 ──────────────────────────────────────────────────────────────
