@@ -1,0 +1,27 @@
+{
+  "upstream": "https://api.deepseek.com",
+  "api_key": "sk-8627083c220d4eed8b03d36e4c51ad9d",
+  "fallback_api_key": "",
+  "model_mapping": {
+    "gpt-5.4-mini": "deepseek-v4-flash",
+    "gpt-5.5": "deepseek-v4-pro",
+    "gpt-4.1": "deepseek-v4-flash"
+  },
+  "log": {
+    "level": "debug",
+    "truncate_length": 200
+  },
+  "data_dir": "./data",
+  "users": [
+    {
+      "name": "david",
+      "api_key": "sk-smart-kind-44b331aa-41d0-4069-8497-2ee4529c3328",
+      "usage_limit": 10000000
+    },
+    {
+      "name": "xin",
+      "api_key": "sk-smart-kind-0c6e3ab4-28dd-483d-a50a-7779f8993ea0",
+      "usage_limit": 5000000
+    }
+  ]
+}

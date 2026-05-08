@@ -56,8 +56,9 @@ export function toChatRequest(
       const itemType = (item?.type as string) || "";
 
       if (itemType === "function_call") {
-        // Collect consecutive function_call items into one assistant message
+        // Collect consecutive function_call items.
         const grouped: Record<string, unknown>[] = [];
+        const newCallIds: string[] = [];
         let reasoningContent: string | undefined = undefined;
 
         while (i < input.length) {
@@ -77,23 +78,47 @@ export function toChatRequest(
             type: "function",
             function: { name, arguments: args },
           });
+          newCallIds.push(callId);
           i++;
         }
 
-        const msg: ChatMessage = {
-          role: "assistant",
-          content: undefined,
-          reasoning_content: reasoningContent,
-          tool_calls: grouped,
-        };
+        // If the last message is an assistant with tool_calls, check whether
+        // the new function_call items are a replay of history (same call_ids).
+        // If so, skip — the history already has them.
+        // If different call_ids (new round of tool calls), merge into existing.
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg?.role === "assistant" && lastMsg.tool_calls) {
+          const existingIds = new Set(
+            lastMsg.tool_calls.map((tc) => (tc as Record<string, unknown>)?.id as string),
+          );
+          const isNew = newCallIds.some((id) => !existingIds.has(id));
 
-        // Fallback: try turn-level lookup if call_id lookup missed
-        if (!msg.reasoning_content) {
-          msg.reasoning_content = sessions.getTurnReasoning(messages, msg);
+          if (isNew) {
+            // New round of tool calls — merge into existing assistant.
+            lastMsg.tool_calls.push(...grouped);
+            log.debug("合并新轮次 function_call 到已有 assistant", {
+              total_tool_calls: lastMsg.tool_calls.length,
+            });
+          } else {
+            // Same call_ids as history — skip to avoid duplication.
+            log.debug("跳过重复的 function_call items", { call_ids: newCallIds });
+          }
+        } else {
+          const msg: ChatMessage = {
+            role: "assistant",
+            content: undefined,
+            reasoning_content: reasoningContent,
+            tool_calls: grouped,
+          };
+
+          // Fallback: try turn-level lookup if call_id lookup missed
+          if (!msg.reasoning_content) {
+            msg.reasoning_content = sessions.getTurnReasoning(messages, msg);
+          }
+
+          messages.push(msg);
+          log.debug("function_call 分组完成", { tool_calls_count: grouped.length });
         }
-
-        messages.push(msg);
-        log.debug("function_call 分组完成", { tool_calls_count: grouped.length });
       } else {
         switch (itemType) {
           case "function_call_output": {
@@ -118,8 +143,24 @@ export function toChatRequest(
               content: content,
             };
 
-            // For assistant messages, try to recover reasoning_content
-            if (msg.role === "assistant") {
+            // Handle tool_calls embedded in assistant message items
+            // (stream.ts embeds tool_calls into the message item when both
+            // text and tool_calls are present, so codex replays them as one item)
+            if (role === "assistant") {
+              const rawToolCalls = item?.tool_calls as unknown[] | undefined;
+              if (rawToolCalls && rawToolCalls.length > 0) {
+                msg.tool_calls = rawToolCalls.map((tc) => {
+                  const t = tc as Record<string, unknown>;
+                  return {
+                    id: (t?.id as string) || "",
+                    type: (t?.type as string) || "function",
+                    function: {
+                      name: ((t?.function as Record<string, unknown>)?.name as string) || "",
+                      arguments: ((t?.function as Record<string, unknown>)?.arguments as string) || "{}",
+                    },
+                  };
+                });
+              }
               msg.reasoning_content = sessions.getTurnReasoning(messages, msg);
             }
 
@@ -131,6 +172,16 @@ export function toChatRequest(
       }
     }
   }
+
+  log.debug("最终消息序列", {
+    messages: messages.map((m, i) => ({
+      idx: i,
+      role: m.role,
+      has_content: !!m.content,
+      has_tool_calls: !!m.tool_calls,
+      has_reasoning: !!m.reasoning_content,
+    })),
+  });
 
   const chatReq = {
     model: req.model,

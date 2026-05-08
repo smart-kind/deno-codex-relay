@@ -2,7 +2,7 @@ import { Config, SessionStore } from "./config.ts";
 import type { UserConfig } from "./config.ts";
 import { toChatRequest, fromChatResponse } from "./translate.ts";
 import { translateStream } from "./stream.ts";
-import { createModuleLogger } from "./logger.ts";
+import { createModuleLogger, setLogFile } from "./logger.ts";
 import { authenticateRequest, authErrorResponse } from "./auth.ts";
 import { UsageStore } from "./usage.ts";
 import { appendChatLog, appendSystemError } from "./persist.ts";
@@ -10,12 +10,18 @@ import type { ResponsesRequest, ChatRequest, ChatResponse, ChatLogEntry, SystemE
 
 const log = createModuleLogger("main");
 
-// Default port
-const PORT = parseInt(Deno.env.get("CODEX_RELAY_PORT") || "7150");
-
 // Global state
 const config = Config.load();
+
+// 设置运行时日志文件，所有调试日志将写入此处
+const logFilePath = `${config.dataDir}/runtime.log`;
+setLogFile(logFilePath);
+log.info("日志文件已配置", { logFile: logFilePath });
+
 const sessions = new SessionStore();
+
+// Default port
+const PORT = parseInt(Deno.env.get("CODEX_RELAY_PORT") || "7150");
 const usageStore = new UsageStore(config.dataDir);
 
 log.info("服务器启动", {

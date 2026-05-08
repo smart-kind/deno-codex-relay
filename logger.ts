@@ -5,6 +5,7 @@ type LogLevel = "debug" | "info" | "warn" | "error";
 interface LogConfig {
   level: LogLevel;
   truncate_length: number;
+  logFile?: string;
 }
 
 // 全局日志配置（由 main.ts 初始化）
@@ -18,12 +19,18 @@ export function initLogger(config: Partial<LogConfig>): void {
   logConfig = {
     level: config.level || "info",
     truncate_length: config.truncate_length || 200,
+    logFile: config.logFile,
   };
 }
 
 // 获取当前日志配置
 export function getLogConfig(): LogConfig {
   return logConfig;
+}
+
+// 设置日志文件路径
+export function setLogFile(path: string | undefined): void {
+  logConfig.logFile = path;
 }
 
 // 级别优先级映射
@@ -59,28 +66,48 @@ function formatTime(): string {
 }
 
 // 日志输出函数
-function log(level: LogLevel, module: string, message: string, data?: unknown): void {
-  if (!shouldLog(level)) return;
-
+async function log(level: LogLevel, module: string, message: string, data?: unknown): Promise<void> {
   const time = formatTime();
   const levelStr = level.toUpperCase().padEnd(5);
 
-  let output = `[${time}] [${levelStr}] [${module}] ${message}`;
+  // 文件写入：始终记录，不截断，不受 logLevel 限制
+  const dataStrFull = data !== undefined
+    ? (typeof data === "string" ? data : JSON.stringify(data))
+    : "";
+  const fileLine = dataStrFull
+    ? `[${time}] [${levelStr}] [${module}] ${message} | ${dataStrFull}`
+    : `[${time}] [${levelStr}] [${module}] ${message}`;
 
-  if (data !== undefined) {
-    const dataStr = typeof data === "string"
-      ? truncate(data, logConfig.truncate_length)
-      : truncateObj(data, logConfig.truncate_length);
-    output += ` | ${dataStr}`;
+  if (logConfig.logFile) {
+    try {
+      await Deno.writeTextFile(logConfig.logFile, fileLine + "\n", { append: true, create: true });
+    } catch {
+      // 静默忽略文件写入错误，避免影响请求
+    }
   }
 
-  // 根据级别选择输出方式
-  if (level === "error") {
-    console.error(output);
-  } else if (level === "warn") {
-    console.warn(output);
+  // 控制台输出：受 logLevel 限制
+  if (!shouldLog(level)) return;
+
+  // 控制台始终截断
+  let consoleOutput: string;
+  if (data !== undefined) {
+    const dataStr = logConfig.level === "debug"
+      ? dataStrFull
+      : (typeof data === "string"
+        ? truncate(data, logConfig.truncate_length)
+        : truncateObj(data, logConfig.truncate_length));
+    consoleOutput = `[${time}] [${levelStr}] [${module}] ${message} | ${dataStr}`;
   } else {
-    console.log(output);
+    consoleOutput = fileLine;
+  }
+
+  if (level === "error") {
+    console.error(consoleOutput);
+  } else if (level === "warn") {
+    console.warn(consoleOutput);
+  } else {
+    console.log(consoleOutput);
   }
 }
 

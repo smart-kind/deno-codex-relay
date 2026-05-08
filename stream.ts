@@ -428,7 +428,10 @@ export async function* translateStream(
 
   const toolCallEntries = Array.from(toolCalls.entries());
   for (const [relIdx, [_, tc]] of toolCallEntries.entries()) {
-    const fcItemId = `fc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // Use upstream's original call_id as the item ID so that downstream
+    // Codex CLI echoes the same call_id back in function_call_output items.
+    // This keeps the ID chain consistent end-to-end.
+    const fcItemId = tc.id || `fc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const outputIndex = baseIndex + relIdx;
 
     yield sseEvent("response.output_item.added", {
@@ -553,17 +556,30 @@ export async function* translateStream(
   await appendChatLog(config.dataDir, user.name, chatLogEntry);
 
   // Build output array for response.completed
+  // When both text and tool_calls exist, embed tool_calls into the message item
+  // so codex replays them as a SINGLE assistant message (not two separate ones).
   const outputItems: unknown[] = [];
-  if (emittedMessageItem) {
-    outputItems.push({
+  if (emittedMessageItem || fcItems.length > 0) {
+    const msgItem: Record<string, unknown> = {
       type: "message",
       id: msgItemId,
       role: "assistant",
       status: "completed",
       content: [{ type: "output_text", text: accumulatedText }],
-    });
+    };
+    // Embed tool_calls into the message item if any exist.
+    if (fcItems.length > 0) {
+      msgItem.tool_calls = fcItems.map((item) => {
+        const fc = item as Record<string, unknown>;
+        return {
+          type: "function",
+          id: fc.call_id,
+          function: { name: fc.name, arguments: fc.arguments },
+        };
+      });
+    }
+    outputItems.push(msgItem);
   }
-  outputItems.push(...fcItems);
 
   yield sseEvent("response.completed", {
     type: "response.completed",

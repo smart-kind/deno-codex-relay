@@ -42,7 +42,7 @@ export class Config {
     modelMapping: Record<string, string> = {},
     users: UserConfig[] = [],
     dataDir: string = "./data",
-    logLevel: "debug" | "info" | "warn" | "error" = "info",
+    logLevel: "debug" | "info" | "warn" | "error" = "error",
     logTruncateLength: number = 200
   ) {
     this.upstream = upstream;
